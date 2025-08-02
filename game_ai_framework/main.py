@@ -13,18 +13,22 @@ from typing import Dict, Any
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from games.asteroids import AsteroidsGame
+from games.snake import SnakeGame
 from agents.meta_agent import MetaLearningAgent
 from agents.task_agents import create_task_agent
 from core.base_game import TaskContext
 
 
-def demonstrate_framework():
+def demonstrate_framework(game_name="asteroids"):
     """Demonstrate the modular framework"""
     print("Game AI Framework - Modular Meta-Learning System")
     print("=" * 60)
     
     # Initialize game
-    game = AsteroidsGame(render=True)
+    if game_name.lower() == "snake":
+        game = SnakeGame(render=True)
+    else:
+        game = AsteroidsGame(render=True)
     state = game.reset()
     
     # Get state vector size
@@ -32,7 +36,7 @@ def demonstrate_framework():
     state_size = len(state_vector)
     action_size = game.get_action_space()
     
-    print(f"\nGame: Asteroids")
+    print(f"\nGame: {game.__class__.__name__}")
     print(f"State size: {state_size}")
     print(f"Action space: {action_size}")
     print(f"Actions: {game.get_action_meanings()}")
@@ -118,7 +122,8 @@ def demonstrate_framework():
                 print(f"  Task usage: {[f'{k}: {v:.2%}' for k, v in metrics.items() if 'usage_rate' in k]}")
             
             if done:
-                print(f"\nGame Over! Score: {info['lives']}")
+                score_key = 'score' if 'score' in info else 'lives'
+                print(f"\nGame Over! Score: {info[score_key]}")
                 state = game.reset()
                 total_reward = 0
         
@@ -195,9 +200,31 @@ def train_individual_tasks():
 if __name__ == "__main__":
     import sys
     
-    if len(sys.argv) > 1 and sys.argv[1] == "train_tasks":
-        # Create models directory
-        os.makedirs("models", exist_ok=True)
-        train_individual_tasks()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "train_tasks":
+            # Create models directory
+            os.makedirs("models", exist_ok=True)
+            train_individual_tasks()
+        elif sys.argv[1] == "snake":
+            demonstrate_framework("snake")
+        elif sys.argv[1] == "asteroids":
+            demonstrate_framework("asteroids")
+        else:
+            print("Usage: python main.py [asteroids|snake|train_tasks]")
     else:
-        demonstrate_framework()
+        # Show menu
+        print("\nGame AI Framework")
+        print("1. Asteroids Demo")
+        print("2. Snake Demo")
+        print("3. Train Task Agents")
+        choice = input("\nSelect option (1-3): ")
+        
+        if choice == "1":
+            demonstrate_framework("asteroids")
+        elif choice == "2":
+            demonstrate_framework("snake")
+        elif choice == "3":
+            os.makedirs("models", exist_ok=True)
+            train_individual_tasks()
+        else:
+            print("Invalid choice")
