@@ -91,11 +91,11 @@ class AvoidanceAgent(TaskSpecificAgent):
             return None
         
         batch = random.sample(self.memory, batch_size)
-        states = torch.FloatTensor([e[0] for e in batch]).to(self.device)
-        actions = torch.LongTensor([e[1] for e in batch]).to(self.device)
-        rewards = torch.FloatTensor([e[2] for e in batch]).to(self.device)
-        next_states = torch.FloatTensor([e[3] for e in batch]).to(self.device)
-        dones = torch.FloatTensor([e[4] for e in batch]).to(self.device)
+        states = torch.FloatTensor(np.array([e[0] for e in batch])).to(self.device)
+        actions = torch.LongTensor(np.array([e[1] for e in batch])).to(self.device)
+        rewards = torch.FloatTensor(np.array([e[2] for e in batch])).to(self.device)
+        next_states = torch.FloatTensor(np.array([e[3] for e in batch])).to(self.device)
+        dones = torch.FloatTensor(np.array([e[4] for e in batch])).to(self.device)
         
         current_q_values = self.network(states).gather(1, actions.unsqueeze(1))
         next_q_values = self.network(next_states).max(1)[0].detach()
@@ -185,11 +185,11 @@ class CombatAgent(TaskSpecificAgent):
             return None
         
         batch = random.sample(self.memory, batch_size)
-        states = torch.FloatTensor([e[0] for e in batch]).to(self.device)
-        actions = torch.LongTensor([e[1] for e in batch]).to(self.device)
-        rewards = torch.FloatTensor([e[2] for e in batch]).to(self.device)
-        next_states = torch.FloatTensor([e[3] for e in batch]).to(self.device)
-        dones = torch.FloatTensor([e[4] for e in batch]).to(self.device)
+        states = torch.FloatTensor(np.array([e[0] for e in batch])).to(self.device)
+        actions = torch.LongTensor(np.array([e[1] for e in batch])).to(self.device)
+        rewards = torch.FloatTensor(np.array([e[2] for e in batch])).to(self.device)
+        next_states = torch.FloatTensor(np.array([e[3] for e in batch])).to(self.device)
+        dones = torch.FloatTensor(np.array([e[4] for e in batch])).to(self.device)
         
         current_q_values = self.network(states).gather(1, actions.unsqueeze(1))
         next_q_values = self.network(next_states).max(1)[0].detach()
@@ -277,11 +277,11 @@ class NavigationAgent(TaskSpecificAgent):
             return None
         
         batch = random.sample(self.memory, batch_size)
-        states = torch.FloatTensor([e[0] for e in batch]).to(self.device)
-        actions = torch.LongTensor([e[1] for e in batch]).to(self.device)
-        rewards = torch.FloatTensor([e[2] for e in batch]).to(self.device)
-        next_states = torch.FloatTensor([e[3] for e in batch]).to(self.device)
-        dones = torch.FloatTensor([e[4] for e in batch]).to(self.device)
+        states = torch.FloatTensor(np.array([e[0] for e in batch])).to(self.device)
+        actions = torch.LongTensor(np.array([e[1] for e in batch])).to(self.device)
+        rewards = torch.FloatTensor(np.array([e[2] for e in batch])).to(self.device)
+        next_states = torch.FloatTensor(np.array([e[3] for e in batch])).to(self.device)
+        dones = torch.FloatTensor(np.array([e[4] for e in batch])).to(self.device)
         
         current_q_values = self.network(states).gather(1, actions.unsqueeze(1))
         next_q_values = self.network(next_states).max(1)[0].detach()

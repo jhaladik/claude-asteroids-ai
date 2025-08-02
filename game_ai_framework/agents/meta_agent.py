@@ -59,7 +59,7 @@ class MetaLearningAgent(MetaAgent):
         
         # Get task probabilities from selector network
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        task_probs = self.task_selector(state_tensor).squeeze().cpu().numpy()
+        task_probs = self.task_selector(state_tensor).squeeze().detach().cpu().numpy()
         
         # Get confidence scores from each task agent
         confidences = {}

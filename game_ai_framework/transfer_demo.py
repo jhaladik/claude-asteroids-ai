@@ -32,12 +32,12 @@ def visualize_transfer_potential(agent: MetaLearningAgent, game1: BaseGame, game
     
     # Compare state vector sizes
     print(f"\nState Vector Comparison:")
-    print(f"  {game1.__class__.__name__}: {len(state1.raw_state)} dimensions")
-    print(f"  {game2.__class__.__name__}: {len(state2.raw_state)} dimensions")
+    print(f"  {game1.__class__.__name__}: {len(game1.get_state_vector())} dimensions")
+    print(f"  {game2.__class__.__name__}: {len(game2.get_state_vector())} dimensions")
     
     # Compare task contexts
-    context1 = state1.task_context
-    context2 = state2.task_context
+    context1 = game1.analyze_task_context()
+    context2 = game2.analyze_task_context()
     
     print(f"\nTask Context Comparison:")
     print(f"  {'Task':<20} {'Asteroids':>10} {'Snake':>10}")
@@ -48,8 +48,8 @@ def visualize_transfer_potential(agent: MetaLearningAgent, game1: BaseGame, game
     print(f"  {'Survival':<20} {context1.survival_priority:>10.2f} {context2.survival_priority:>10.2f}")
     
     # Compare semantic features
-    semantic1 = state1.semantic_features
-    semantic2 = state2.semantic_features
+    semantic1 = game1.get_semantic_features()
+    semantic2 = game2.get_semantic_features()
     
     print(f"\nSemantic Features Comparison:")
     print(f"  {'Feature':<25} {'Asteroids':>10} {'Snake':>10}")
@@ -73,8 +73,8 @@ def demonstrate_transfer(pretrained_path: str = None):
     asteroids_state = asteroids.reset()
     snake_state = snake.reset()
     
-    asteroids_state_size = len(asteroids_state.raw_state)
-    snake_state_size = len(snake_state.raw_state)
+    asteroids_state_size = len(asteroids.get_state_vector())
+    snake_state_size = len(snake.get_state_vector())
     
     # We'll use the larger state size and pad if necessary
     max_state_size = max(asteroids_state_size, snake_state_size)
@@ -87,6 +87,24 @@ def demonstrate_transfer(pretrained_path: str = None):
     if pretrained_path and os.path.exists(pretrained_path):
         print(f"Loading pretrained weights from {pretrained_path}...")
         agent.load(pretrained_path)
+    else:
+        # Try to load individual task agents
+        print("Loading pre-trained task agents...")
+        loaded_count = 0
+        for task_name in ['avoidance', 'combat', 'navigation']:
+            model_path = f"models/best_{task_name}_agent.pth"
+            if os.path.exists(model_path):
+                try:
+                    agent.task_agents[task_name].load(model_path)
+                    print(f"  [OK] Loaded {task_name} agent")
+                    loaded_count += 1
+                except Exception as e:
+                    print(f"  [SKIP] Failed to load {task_name} agent (incompatible action space)")
+            else:
+                print(f"  - No model found for {task_name} agent")
+        
+        if loaded_count > 0:
+            print(f"Successfully loaded {loaded_count} task agents")
     
     # Analyze transfer potential
     visualize_transfer_potential(agent, asteroids, snake)
@@ -121,7 +139,8 @@ def demonstrate_transfer(pretrained_path: str = None):
         
         while not done and steps < 1000:
             # Adapt state to agent's expected size
-            adapted_state = adapt_state(state.raw_state, max_state_size)
+            state_vector = snake.get_state_vector()
+            adapted_state = adapt_state(state_vector, max_state_size)
             
             # Get action from agent
             action = agent.act(adapted_state, training=False)
@@ -207,7 +226,8 @@ def compare_random_vs_transfer():
     
     # Test transfer agent
     print("\nTesting Transfer Agent...")
-    state_size = len(snake.reset().raw_state)
+    snake.reset()
+    state_size = len(snake.get_state_vector())
     agent = MetaLearningAgent(state_size, 3)
     
     transfer_scores = []
@@ -216,7 +236,8 @@ def compare_random_vs_transfer():
         done = False
         steps = 0
         while not done and steps < 1000:
-            action = agent.act(state.raw_state, training=False)
+            state_vector = snake.get_state_vector()
+            action = agent.act(state_vector, training=False)
             state, _, done, info = snake.step(action)
             steps += 1
         transfer_scores.append(info['score'])
