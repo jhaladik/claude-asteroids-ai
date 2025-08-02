@@ -34,7 +34,7 @@ def main():
         
         if choice == "1":
             print("\nLaunching Desktop Dashboard...")
-            run_command("dashboard.py")
+            run_command("dashboard_fixed.py")
         
         elif choice == "2":
             print("\nLaunching Web Dashboard...")
