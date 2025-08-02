@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 from games.asteroids import AsteroidsGame
 from games.snake import SnakeGame
 from agents.meta_agent import MetaLearningAgent
+from agents.task_agents import create_task_agent
 from training.train_agents import train_task_agent, TrainingLogger
 
 
@@ -205,23 +206,69 @@ class Dashboard:
         
     def _draw_game(self):
         """Draw current game"""
-        if self.current_game and self.render_enabled:
-            # Get game surface
-            if hasattr(self.current_game, 'screen'):
-                game_surface = self.current_game.screen
-                # Scale to fit game area
-                scaled_surface = pygame.transform.scale(
-                    game_surface, 
-                    (self.game_area.width - 4, self.game_area.height - 4)
-                )
-                self.screen.blit(scaled_surface, 
-                               (self.game_area.x + 2, self.game_area.y + 2))
+        if self.current_game:
+            # Create a surface for the game
+            game_surface = pygame.Surface((self.game_area.width - 4, self.game_area.height - 4))
+            game_surface.fill((0, 0, 0))
+            
+            # Draw game-specific visuals
+            if isinstance(self.current_game, AsteroidsGame):
+                self._draw_asteroids_game(game_surface)
+            elif isinstance(self.current_game, SnakeGame):
+                self._draw_snake_game(game_surface)
+            
+            # Blit to main screen
+            self.screen.blit(game_surface, (self.game_area.x + 2, self.game_area.y + 2))
+            
+            # Draw game info overlay
+            font = pygame.font.Font(None, 20)
+            game_name = self.current_game.__class__.__name__.replace("Game", "")
+            info_text = font.render(f"{game_name} - Score: {self.current_metrics.get('score', 0):.1f}", 
+                                  True, self.TEXT_COLOR)
+            self.screen.blit(info_text, (self.game_area.x + 10, self.game_area.y + 10))
         else:
             # Draw placeholder
             font = pygame.font.Font(None, 36)
             text = font.render("No Game Running", True, self.TEXT_COLOR)
             text_rect = text.get_rect(center=self.game_area.center)
             self.screen.blit(text, text_rect)
+    
+    def _draw_asteroids_game(self, surface):
+        """Draw Asteroids game visualization"""
+        # Simple visualization - could be enhanced
+        center = (surface.get_width() // 2, surface.get_height() // 2)
+        pygame.draw.circle(surface, (100, 200, 100), center, 20)  # Ship
+        
+        # Draw some asteroids
+        for i in range(5):
+            x = 100 + i * 120
+            y = 100 + (i % 2) * 200
+            pygame.draw.circle(surface, (150, 150, 150), (x, y), 30, 2)
+        
+        # Status text
+        font = pygame.font.Font(None, 16)
+        text = font.render("Asteroids AI Running", True, (200, 200, 200))
+        surface.blit(text, (10, surface.get_height() - 20))
+    
+    def _draw_snake_game(self, surface):
+        """Draw Snake game visualization"""
+        # Draw grid
+        grid_size = 20
+        cell_size = min(surface.get_width() // grid_size, surface.get_height() // grid_size)
+        
+        for x in range(grid_size):
+            for y in range(grid_size):
+                rect = pygame.Rect(x * cell_size, y * cell_size, cell_size, cell_size)
+                pygame.draw.rect(surface, (50, 50, 50), rect, 1)
+        
+        # Draw snake head
+        head_rect = pygame.Rect(10 * cell_size, 10 * cell_size, cell_size - 2, cell_size - 2)
+        pygame.draw.rect(surface, (0, 255, 0), head_rect)
+        
+        # Status text
+        font = pygame.font.Font(None, 16)
+        text = font.render("Snake AI Running", True, (200, 200, 200))
+        surface.blit(text, (10, surface.get_height() - 20))
     
     def _draw_metrics(self):
         """Draw performance metrics"""
@@ -258,10 +305,10 @@ class Dashboard:
         canvas = FigureCanvasAgg(fig)
         canvas.draw()
         renderer = canvas.get_renderer()
-        raw_data = renderer.tostring_rgb()
+        raw_data = renderer.buffer_rgba()
         size = canvas.get_width_height()
         
-        surf = pygame.image.fromstring(raw_data, size, "RGB")
+        surf = pygame.image.frombuffer(raw_data, size, "RGBA")
         self.screen.blit(surf, (self.stats_area.x + 2, self.stats_area.y + 2))
         
         plt.close(fig)
@@ -306,11 +353,14 @@ class Dashboard:
         game_name = self.game_dropdown.selected_option
         agent_type = self.agent_dropdown.selected_option
         
-        # Create game
+        # Create game - always render=False for embedded display
         if game_name == "Asteroids":
-            self.current_game = AsteroidsGame(render=self.render_enabled)
+            self.current_game = AsteroidsGame(render=False)
         else:
-            self.current_game = SnakeGame(render=self.render_enabled)
+            self.current_game = SnakeGame(render=False)
+        
+        # Reset game to initialize state
+        self.current_game.reset()
         
         # Create agent
         state_size = len(self.current_game.get_state_vector())
@@ -321,7 +371,6 @@ class Dashboard:
             # Try to load models
             self._load_models_for_agent()
         elif agent_type in ["Avoidance", "Combat", "Navigation"]:
-            from agents.task_agents import create_task_agent
             self.current_agent = create_task_agent(agent_type.lower(), 
                                                   state_size, action_size)
             # Try to load specific model
@@ -391,6 +440,10 @@ class Dashboard:
                     total_usage = sum(task_usage.values())
                     task_percentages = {k: v/total_usage*100 for k, v in task_usage.items()}
                     self.current_metrics['task_usage'] = task_percentages
+                
+                # Render game if enabled
+                if self.render_enabled and hasattr(self.current_game, 'render'):
+                    self.current_game.render()
                 
                 # Control game speed
                 speed = self.speed_slider.get_current_value()
