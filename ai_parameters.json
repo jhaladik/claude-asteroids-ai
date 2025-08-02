@@ -1,0 +1,137 @@
+{
+  "dqn_parameters": {
+    "default": {
+      "learning_rate": 0.001,
+      "gamma": 0.95,
+      "epsilon_start": 1.0,
+      "epsilon_min": 0.01,
+      "epsilon_decay": 0.9998,
+      "batch_size": 32,
+      "memory_size": 10000,
+      "update_frequency": 1,
+      "hidden_layers": [128, 128, 64],
+      "description": "Original parameters - slow epsilon decay may cause performance degradation"
+    },
+    "fast_learning": {
+      "learning_rate": 0.0005,
+      "gamma": 0.95,
+      "epsilon_start": 1.0,
+      "epsilon_min": 0.01,
+      "epsilon_decay": 0.995,
+      "batch_size": 64,
+      "memory_size": 20000,
+      "update_frequency": 4,
+      "hidden_layers": [128, 128, 64],
+      "description": "Faster epsilon decay, larger batch size for stability"
+    },
+    "balanced_learning": {
+      "learning_rate": 0.0005,
+      "gamma": 0.95,
+      "epsilon_start": 1.0,
+      "epsilon_min": 0.01,
+      "epsilon_decay": 0.9995,
+      "batch_size": 64,
+      "memory_size": 20000,
+      "update_frequency": 4,
+      "hidden_layers": [128, 128, 64],
+      "description": "Balanced epsilon decay - reaches 0.01 around episode 200-300"
+    },
+    "stable_learning": {
+      "learning_rate": 0.0001,
+      "gamma": 0.9,
+      "epsilon_start": 1.0,
+      "epsilon_min": 0.05,
+      "epsilon_decay": 0.997,
+      "batch_size": 128,
+      "memory_size": 50000,
+      "update_frequency": 10,
+      "hidden_layers": [256, 128, 64],
+      "description": "Very stable learning with lower learning rate and gamma"
+    },
+    "exploration_focused": {
+      "learning_rate": 0.001,
+      "gamma": 0.95,
+      "epsilon_start": 1.0,
+      "epsilon_min": 0.1,
+      "epsilon_decay": 0.999,
+      "batch_size": 32,
+      "memory_size": 10000,
+      "update_frequency": 1,
+      "hidden_layers": [128, 128, 64],
+      "description": "Maintains higher exploration rate throughout training"
+    }
+  },
+  "meta_parameters": {
+    "default": {
+      "task_networks": {
+        "survival": {"hidden_size": 64, "learning_rate": 0.001},
+        "navigation": {"hidden_size": 64, "learning_rate": 0.001},
+        "targeting": {"hidden_size": 64, "learning_rate": 0.001},
+        "threat_assessment": {"hidden_size": 64, "learning_rate": 0.001},
+        "resource_management": {"hidden_size": 64, "learning_rate": 0.001}
+      },
+      "task_scheduler": {
+        "survival_threshold": 3.0,
+        "threat_threshold": 2,
+        "bullet_efficiency": 0.3
+      },
+      "global_params": {
+        "epsilon_start": 1.0,
+        "epsilon_min": 0.01,
+        "epsilon_decay": 0.9998,
+        "batch_size": 32,
+        "gamma": 0.95
+      }
+    },
+    "specialized_learning": {
+      "task_networks": {
+        "survival": {"hidden_size": 128, "learning_rate": 0.0005},
+        "navigation": {"hidden_size": 64, "learning_rate": 0.001},
+        "targeting": {"hidden_size": 96, "learning_rate": 0.0008},
+        "threat_assessment": {"hidden_size": 64, "learning_rate": 0.001},
+        "resource_management": {"hidden_size": 32, "learning_rate": 0.002}
+      },
+      "task_scheduler": {
+        "survival_threshold": 2.5,
+        "threat_threshold": 3,
+        "bullet_efficiency": 0.4
+      },
+      "global_params": {
+        "epsilon_start": 1.0,
+        "epsilon_min": 0.05,
+        "epsilon_decay": 0.997,
+        "batch_size": 64,
+        "gamma": 0.93
+      }
+    }
+  },
+  "training_schedules": {
+    "standard": {
+      "episodes": 1000,
+      "curriculum": true,
+      "level_progression": "linear",
+      "early_stopping": false
+    },
+    "intensive": {
+      "episodes": 5000,
+      "curriculum": true,
+      "level_progression": "adaptive",
+      "early_stopping": true,
+      "early_stopping_patience": 200
+    },
+    "quick_test": {
+      "episodes": 100,
+      "curriculum": false,
+      "level_progression": "none",
+      "early_stopping": false
+    }
+  },
+  "optimization_notes": {
+    "epsilon_decay": "Key parameter affecting exploration vs exploitation. Too slow (0.9998) causes overexploration, too fast (<0.99) causes premature convergence",
+    "learning_rate": "Controls update magnitude. Lower values (0.0001-0.0005) are more stable but slower",
+    "gamma": "Discount factor for future rewards. Lower values (0.9) focus on immediate rewards, higher (0.99) on long-term",
+    "batch_size": "Larger batches (64-128) provide more stable gradients but slower updates",
+    "memory_size": "Larger buffers (20000+) provide more diverse experiences but use more memory",
+    "update_frequency": "Update every N steps. Higher values (4-10) can stabilize learning"
+  }
+}

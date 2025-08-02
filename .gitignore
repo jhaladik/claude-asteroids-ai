@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# PyTorch
+*.pth
+*.pt
+models/
+checkpoint/
+
+# Logs
+*.log
+training_logs/*.csv
+training_logs/*.json
+training_analysis_*/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.pkl
+temp/
+experiments/
