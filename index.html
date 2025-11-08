@@ -768,11 +768,29 @@
                     // 🔥 KNOWLEDGE TRANSFER: Copy Explorer's Q-table to Collector!
                     // Both use same 11-feature state, so Q-tables are compatible
                     if (this.collector.episodes === 0) {
-                        // First-time transfer: Collector inherits ALL Explorer's navigation knowledge
+                        // First-time transfer: Collector inherits Explorer's navigation knowledge
                         this.collector.qTable = JSON.parse(JSON.stringify(this.explorer.qTable));
-                        this.collector.epsilon = this.explorer.epsilon; // Inherit exploration level too
+
+                        // 🔥 CRITICAL FIX #1: Add optimism bonus to Q-values
+                        // Explorer's Q-table has negative values for "non-goal" actions
+                        // Add small bonus to encourage Collector to try gem-collecting actions
+                        const optimismBonus = 5; // Small positive boost
+                        for (const stateKey in this.collector.qTable) {
+                            for (let i = 0; i < this.collector.qTable[stateKey].length; i++) {
+                                this.collector.qTable[stateKey][i] += optimismBonus;
+                            }
+                        }
+
+                        // 🔥 CRITICAL FIX #2: Reset epsilon to enable gem strategy relearning!
+                        // Explorer's Q-table says "ignore gems", but Collector needs "collect gems"
+                        // Higher epsilon = more exploration = can override inherited "ignore gems" patterns
+                        this.collector.epsilon = 0.6; // 60% exploration to learn new gem-focused strategy
+
                         console.log(`📚 Knowledge Transfer: Copied ${Object.keys(this.explorer.qTable).length} navigation patterns to Collector!`);
-                        console.log(`   Explorer epsilon: ${Math.round(this.explorer.epsilon * 100)}% → Collector starts at same level`);
+                        console.log(`   🎁 Added optimism bonus (+${optimismBonus}) to all Q-values`);
+                        console.log(`   ⚠️ Epsilon reset to 60% (not ${Math.round(this.explorer.epsilon * 100)}%)`);
+                        console.log(`   Why? Explorer learned "ignore gems", Collector needs to UNLEARN and learn "collect gems"`);
+                        console.log(`   Strategy: High exploration + optimistic Q-values = override conflicting patterns`);
                     }
 
                     this.activeAgent = this.collector;
