@@ -32,13 +32,44 @@
         #ui {
             position: absolute;
             top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.8);
-            padding: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            padding: 10px 15px;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
             z-index: 10;
-            min-width: 200px;
+            min-width: 280px;
+            max-width: 90%;
+            transition: all 0.3s ease;
+        }
+
+        #ui.minimized {
+            padding: 8px 15px;
+        }
+
+        #ui.minimized #uiContent {
+            display: none;
+        }
+
+        .minimize-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .minimize-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         #ui div {
@@ -150,23 +181,134 @@
             background: linear-gradient(90deg, #f0f, #0ff);
             transition: width 0.3s;
         }
+
+        .ai-mode {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .exploring {
+            background: #f0f;
+            color: #fff;
+        }
+
+        .exploiting {
+            background: #0ff;
+            color: #000;
+        }
+
+        .info-icon {
+            cursor: help;
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            background: #666;
+            color: #fff;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 14px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        @media (max-width: 600px) {
+            #ui {
+                font-size: 11px;
+                padding: 8px 10px;
+                min-width: 250px;
+            }
+            .ai-learning {
+                font-size: 10px;
+            }
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
 
     <div id="ui">
-        <div style="font-size: 16px; margin-bottom: 10px; color: #ff0;">🏆 MAZE RUNNER</div>
-        <div class="player-stat">👤 YOU: <span id="playerScore">0</span> gems</div>
-        <div class="ai-stat">🤖 AI: <span id="aiScore">0</span> gems</div>
-        <div style="margin-top: 10px;">Level: <span id="level">1</span></div>
-        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
-            <div class="ai-learning">AI Training Progress:</div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
+        <button class="minimize-btn" onclick="toggleUI()" id="minimizeBtn">−</button>
+        <div style="font-size: 15px; margin-bottom: 8px; color: #ff0; text-align: center;">🏆 MAZE RUNNER</div>
+
+        <div id="uiContent">
+            <div style="display: flex; justify-content: space-between;">
+                <div class="player-stat">👤 YOU: <span id="playerScore">0</span></div>
+                <div class="ai-stat">🤖 AI: <span id="aiScore">0</span></div>
             </div>
-            <div class="ai-learning">Episodes: <span id="episodes">0</span></div>
-            <div class="ai-learning">Epsilon: <span id="epsilon">1.00</span></div>
+            <div style="margin-top: 8px; text-align: center;">Level: <span id="level">1</span></div>
+
+            <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">
+                <div class="ai-learning" style="margin-bottom: 5px;">
+                    🧠 AI Training
+                    <span id="aiMode" class="ai-mode exploring">EXPLORING</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
+                </div>
+                <div class="ai-learning">
+                    👁️ Learning from You: <span id="demonstrations">0</span>
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">AI watches your successful paths and learns to copy them! Each time you reach the goal, the AI records your moves and uses them to improve. This helps the AI learn faster than pure random exploration.</span>
+                    </div>
+                </div>
+                <div class="ai-learning">
+                    Training Games: <span id="episodes">0</span>/50
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Each time the AI reaches the goal flag 🏁, it completes one training game and learns from the experience. This counter shows how many times the AI has reached the goal (NOT how many gems collected).</span>
+                    </div>
+                </div>
+                <div class="ai-learning">
+                    Randomness: <span id="epsilon">100</span>%
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">How often AI tries random moves vs using learned strategy. Starts at 100% (random exploring), drops to 1% (using knowledge).</span>
+                    </div>
+                </div>
+                <div style="margin-top: 8px; text-align: center;">
+                    <button onclick="game.resetAI()" style="background: #f44; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace;">
+                        Reset AI Brain
+                    </button>
+                    <div class="tooltip" style="display: inline;">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Clears all saved learning. AI will start from scratch.</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -191,7 +333,15 @@
     </div>
 
     <script>
-        // Simple DQN Implementation
+        // UI Toggle Function
+        function toggleUI() {
+            const ui = document.getElementById('ui');
+            const btn = document.getElementById('minimizeBtn');
+            ui.classList.toggle('minimized');
+            btn.textContent = ui.classList.contains('minimized') ? '+' : '−';
+        }
+
+        // Simple DQN Implementation with Imitation Learning
         class DQNAgent {
             constructor(stateSize, actionSize) {
                 this.stateSize = stateSize;
@@ -207,6 +357,16 @@
 
                 // Simple Q-table instead of neural network (easier for browser)
                 this.qTable = {};
+
+                // Imitation Learning: Store successful human demonstrations
+                this.demonstrations = [];
+                this.currentDemonstration = [];
+                this.maxDemonstrations = 10;
+                this.imitationWeight = 1.0; // Start with full imitation
+                this.imitationDecay = 0.95; // Decrease reliance on demonstrations
+
+                // Load saved progress
+                this.loadProgress();
             }
 
             getStateKey(state) {
@@ -222,6 +382,14 @@
             }
 
             act(state) {
+                // First, try to use imitation learning if we have demonstrations
+                if (this.demonstrations.length > 0 && Math.random() < this.imitationWeight) {
+                    const demonstratedAction = this.getDemonstratedAction(state);
+                    if (demonstratedAction !== null) {
+                        return demonstratedAction;
+                    }
+                }
+
                 // Epsilon-greedy policy
                 if (Math.random() < this.epsilon) {
                     return Math.floor(Math.random() * this.actionSize);
@@ -229,6 +397,85 @@
 
                 const qValues = this.getQValues(state);
                 return qValues.indexOf(Math.max(...qValues));
+            }
+
+            getDemonstratedAction(state) {
+                // Look for this state in demonstrations and return most common action
+                const stateKey = this.getStateKey(state);
+                const actions = [];
+
+                for (const demo of this.demonstrations) {
+                    for (const step of demo) {
+                        if (this.getStateKey(step.state) === stateKey) {
+                            actions.push(step.action);
+                        }
+                    }
+                }
+
+                if (actions.length === 0) return null;
+
+                // Return most common action
+                const actionCounts = {};
+                for (const action of actions) {
+                    actionCounts[action] = (actionCounts[action] || 0) + 1;
+                }
+
+                let bestAction = null;
+                let maxCount = 0;
+                for (const [action, count] of Object.entries(actionCounts)) {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        bestAction = parseInt(action);
+                    }
+                }
+
+                return bestAction;
+            }
+
+            recordDemonstration(state, action) {
+                // Record a state-action pair from human player
+                this.currentDemonstration.push({ state: [...state], action });
+            }
+
+            completeDemonstration(successful) {
+                // Called when player reaches goal or fails
+                if (successful && this.currentDemonstration.length > 0) {
+                    this.demonstrations.push([...this.currentDemonstration]);
+
+                    // Keep only the most recent demonstrations
+                    if (this.demonstrations.length > this.maxDemonstrations) {
+                        this.demonstrations.shift();
+                    }
+
+                    // Learn from the demonstration immediately
+                    this.learnFromDemonstration(this.currentDemonstration);
+
+                    console.log(`✨ AI learned from your path! (${this.demonstrations.length} total demonstrations)`);
+                }
+                this.currentDemonstration = [];
+            }
+
+            learnFromDemonstration(demonstration) {
+                // Pre-train Q-values using the demonstration
+                for (let i = 0; i < demonstration.length - 1; i++) {
+                    const { state, action } = demonstration[i];
+                    const nextState = demonstration[i + 1].state;
+
+                    // Give positive reward for demonstrated actions
+                    const reward = i === demonstration.length - 2 ? 100 : 1;
+
+                    const stateKey = this.getStateKey(state);
+                    if (!this.qTable[stateKey]) {
+                        this.qTable[stateKey] = new Array(this.actionSize).fill(0);
+                    }
+
+                    const nextQValues = this.getQValues(nextState);
+                    const target = reward + this.gamma * Math.max(...nextQValues);
+
+                    // Update Q-value with higher learning rate for demonstrations
+                    this.qTable[stateKey][action] +=
+                        0.1 * (target - this.qTable[stateKey][action]);
+                }
             }
 
             remember(state, action, reward, nextState, done) {
@@ -272,6 +519,60 @@
             endEpisode() {
                 this.episodes++;
                 this.replay(32);
+
+                // Gradually decrease reliance on demonstrations as AI learns
+                if (this.imitationWeight > 0.1) {
+                    this.imitationWeight *= this.imitationDecay;
+                }
+
+                this.saveProgress();
+            }
+
+            saveProgress() {
+                const progress = {
+                    qTable: this.qTable,
+                    epsilon: this.epsilon,
+                    episodes: this.episodes,
+                    demonstrations: this.demonstrations,
+                    imitationWeight: this.imitationWeight
+                };
+                try {
+                    localStorage.setItem('mazeRunnerAI', JSON.stringify(progress));
+                } catch (e) {
+                    console.warn('Failed to save AI progress:', e);
+                }
+            }
+
+            loadProgress() {
+                try {
+                    const saved = localStorage.getItem('mazeRunnerAI');
+                    if (saved) {
+                        const progress = JSON.parse(saved);
+                        this.qTable = progress.qTable || {};
+                        this.epsilon = progress.epsilon || 1.0;
+                        this.episodes = progress.episodes || 0;
+                        this.demonstrations = progress.demonstrations || [];
+                        this.imitationWeight = progress.imitationWeight || 1.0;
+                        console.log(`Loaded AI progress: ${this.episodes} episodes, ${this.demonstrations.length} demonstrations, ${Math.round(this.epsilon * 100)}% randomness`);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load AI progress:', e);
+                }
+            }
+
+            resetProgress() {
+                this.qTable = {};
+                this.epsilon = 1.0;
+                this.episodes = 0;
+                this.memory = [];
+                this.demonstrations = [];
+                this.imitationWeight = 1.0;
+                this.currentDemonstration = [];
+                try {
+                    localStorage.removeItem('mazeRunnerAI');
+                } catch (e) {
+                    console.warn('Failed to clear AI progress:', e);
+                }
             }
         }
 
@@ -286,10 +587,17 @@
         const ctx = canvas.getContext('2d');
 
         function resizeCanvas() {
-            const size = Math.min(window.innerWidth - 20, window.innerHeight - 300);
+            // Account for UI (~180px) and controls (220px) plus margins
+            const availableHeight = window.innerHeight - 420;
+            const availableWidth = window.innerWidth - 20;
+            const size = Math.min(availableWidth, availableHeight, 450); // Max 450px
+
             config.cellSize = Math.floor(size / config.gridSize);
             canvas.width = config.gridSize * config.cellSize;
             canvas.height = config.gridSize * config.cellSize;
+
+            // Add enough top margin to clear the UI
+            canvas.style.marginTop = '200px';
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -499,9 +807,47 @@
                 this.ai = new Character(1, 2, '#0ff', 'AI');
                 this.gameOver = false;
 
+                // Clear current demonstration when starting new level
+                this.agent.currentDemonstration = [];
+
                 document.getElementById('playerScore').textContent = this.player.score;
                 document.getElementById('aiScore').textContent = this.ai.score;
                 document.getElementById('level').textContent = this.level;
+
+                // Update AI stats display
+                this.updateAIDisplay();
+            }
+
+            updateAIDisplay() {
+                document.getElementById('episodes').textContent = this.agent.episodes;
+                document.getElementById('demonstrations').textContent = this.agent.demonstrations.length;
+
+                const epsilonPercent = Math.round(this.agent.epsilon * 100);
+                document.getElementById('epsilon').textContent = epsilonPercent;
+
+                const modeElement = document.getElementById('aiMode');
+
+                // Show imitation mode if AI is using demonstrations
+                if (this.agent.demonstrations.length > 0 && this.agent.imitationWeight > 0.5) {
+                    modeElement.textContent = 'IMITATING';
+                    modeElement.className = 'ai-mode';
+                    modeElement.style.background = '#0ff';
+                    modeElement.style.color = '#000';
+                } else if (this.agent.epsilon > 0.5) {
+                    modeElement.textContent = 'EXPLORING';
+                    modeElement.className = 'ai-mode exploring';
+                } else if (this.agent.epsilon > 0.2) {
+                    modeElement.textContent = 'LEARNING';
+                    modeElement.className = 'ai-mode';
+                    modeElement.style.background = '#c4f';
+                    modeElement.style.color = '#fff';
+                } else {
+                    modeElement.textContent = 'SMART';
+                    modeElement.className = 'ai-mode exploiting';
+                }
+
+                const progress = Math.min(100, (this.agent.episodes / 50) * 100);
+                document.getElementById('aiProgress').style.width = progress + '%';
             }
 
             setupControls() {
@@ -529,17 +875,59 @@
             handlePlayerMove() {
                 if (this.player.reachedGoal) return;
 
-                let dx = 0, dy = 0;
-                if (this.keys['ArrowUp']) dy = -1;
-                else if (this.keys['ArrowDown']) dy = 1;
-                else if (this.keys['ArrowLeft']) dx = -1;
-                else if (this.keys['ArrowRight']) dx = 1;
+                let dx = 0, dy = 0, action = -1;
+                if (this.keys['ArrowUp']) { dy = -1; action = 0; }
+                else if (this.keys['ArrowDown']) { dy = 1; action = 1; }
+                else if (this.keys['ArrowLeft']) { dx = -1; action = 2; }
+                else if (this.keys['ArrowRight']) { dx = 1; action = 3; }
 
                 if (dx !== 0 || dy !== 0) {
+                    // Record state before move for AI learning
+                    const stateBefore = this.player.getState(this.maze);
+
                     this.player.move(dx, dy, this.maze);
                     document.getElementById('playerScore').textContent = this.player.score;
+
+                    // Record this move for AI to learn from
+                    this.agent.recordDemonstration(stateBefore, action);
+
+                    // If player reached goal, complete the demonstration
+                    if (this.player.reachedGoal) {
+                        this.agent.completeDemonstration(true);
+                        this.showLearningMessage();
+                    }
+
                     this.keys = {}; // Clear keys after move
                     this.checkGameOver();
+                }
+            }
+
+            showLearningMessage() {
+                // Show visual feedback that AI learned
+                const msg = document.createElement('div');
+                msg.style.position = 'absolute';
+                msg.style.top = '50%';
+                msg.style.left = '50%';
+                msg.style.transform = 'translate(-50%, -50%)';
+                msg.style.background = 'rgba(0, 255, 255, 0.95)';
+                msg.style.padding = '20px 30px';
+                msg.style.borderRadius = '10px';
+                msg.style.fontSize = '18px';
+                msg.style.fontWeight = 'bold';
+                msg.style.color = '#000';
+                msg.style.zIndex = '1000';
+                msg.style.animation = 'fadeOut 2s forwards';
+                msg.textContent = `✨ AI learned from your path! (${this.agent.demonstrations.length} demonstrations)`;
+                document.body.appendChild(msg);
+
+                setTimeout(() => msg.remove(), 2000);
+
+                // Add CSS animation if not already present
+                if (!document.getElementById('fadeOutStyle')) {
+                    const style = document.createElement('style');
+                    style.id = 'fadeOutStyle';
+                    style.textContent = '@keyframes fadeOut { 0% { opacity: 1; } 50% { opacity: 1; } 100% { opacity: 0; } }';
+                    document.head.appendChild(style);
                 }
             }
 
@@ -563,12 +951,7 @@
                 }
 
                 document.getElementById('aiScore').textContent = this.ai.score;
-                document.getElementById('episodes').textContent = this.agent.episodes;
-                document.getElementById('epsilon').textContent = this.agent.epsilon.toFixed(2);
-
-                const progress = Math.min(100, (this.agent.episodes / 50) * 100);
-                document.getElementById('aiProgress').style.width = progress + '%';
-
+                this.updateAIDisplay();
                 this.checkGameOver();
             }
 
@@ -638,6 +1021,14 @@
                 this.agent = new DQNAgent(10, 4); // Reset AI
                 document.getElementById('modal').style.display = 'none';
                 this.init();
+            }
+
+            resetAI() {
+                if (confirm('Reset AI brain? This will erase all learned knowledge and start training from scratch.')) {
+                    this.agent.resetProgress();
+                    this.updateAIDisplay();
+                    alert('AI brain reset! The AI will start learning from zero.');
+                }
             }
         }
 

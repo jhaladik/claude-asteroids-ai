@@ -279,6 +279,13 @@
                     <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
                 </div>
                 <div class="ai-learning">
+                    👁️ Learning from You: <span id="demonstrations">0</span>
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">AI watches your successful paths and learns to copy them! Each time you reach the goal, the AI records your moves and uses them to improve. This helps the AI learn faster than pure random exploration.</span>
+                    </div>
+                </div>
+                <div class="ai-learning">
                     Training Games: <span id="episodes">0</span>/50
                     <div class="tooltip">
                         <span class="info-icon">?</span>
@@ -334,7 +341,7 @@
             btn.textContent = ui.classList.contains('minimized') ? '+' : '−';
         }
 
-        // Simple DQN Implementation
+        // Simple DQN Implementation with Imitation Learning
         class DQNAgent {
             constructor(stateSize, actionSize) {
                 this.stateSize = stateSize;
@@ -350,6 +357,13 @@
 
                 // Simple Q-table instead of neural network (easier for browser)
                 this.qTable = {};
+
+                // Imitation Learning: Store successful human demonstrations
+                this.demonstrations = [];
+                this.currentDemonstration = [];
+                this.maxDemonstrations = 10;
+                this.imitationWeight = 1.0; // Start with full imitation
+                this.imitationDecay = 0.95; // Decrease reliance on demonstrations
 
                 // Load saved progress
                 this.loadProgress();
@@ -368,6 +382,14 @@
             }
 
             act(state) {
+                // First, try to use imitation learning if we have demonstrations
+                if (this.demonstrations.length > 0 && Math.random() < this.imitationWeight) {
+                    const demonstratedAction = this.getDemonstratedAction(state);
+                    if (demonstratedAction !== null) {
+                        return demonstratedAction;
+                    }
+                }
+
                 // Epsilon-greedy policy
                 if (Math.random() < this.epsilon) {
                     return Math.floor(Math.random() * this.actionSize);
@@ -375,6 +397,85 @@
 
                 const qValues = this.getQValues(state);
                 return qValues.indexOf(Math.max(...qValues));
+            }
+
+            getDemonstratedAction(state) {
+                // Look for this state in demonstrations and return most common action
+                const stateKey = this.getStateKey(state);
+                const actions = [];
+
+                for (const demo of this.demonstrations) {
+                    for (const step of demo) {
+                        if (this.getStateKey(step.state) === stateKey) {
+                            actions.push(step.action);
+                        }
+                    }
+                }
+
+                if (actions.length === 0) return null;
+
+                // Return most common action
+                const actionCounts = {};
+                for (const action of actions) {
+                    actionCounts[action] = (actionCounts[action] || 0) + 1;
+                }
+
+                let bestAction = null;
+                let maxCount = 0;
+                for (const [action, count] of Object.entries(actionCounts)) {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        bestAction = parseInt(action);
+                    }
+                }
+
+                return bestAction;
+            }
+
+            recordDemonstration(state, action) {
+                // Record a state-action pair from human player
+                this.currentDemonstration.push({ state: [...state], action });
+            }
+
+            completeDemonstration(successful) {
+                // Called when player reaches goal or fails
+                if (successful && this.currentDemonstration.length > 0) {
+                    this.demonstrations.push([...this.currentDemonstration]);
+
+                    // Keep only the most recent demonstrations
+                    if (this.demonstrations.length > this.maxDemonstrations) {
+                        this.demonstrations.shift();
+                    }
+
+                    // Learn from the demonstration immediately
+                    this.learnFromDemonstration(this.currentDemonstration);
+
+                    console.log(`✨ AI learned from your path! (${this.demonstrations.length} total demonstrations)`);
+                }
+                this.currentDemonstration = [];
+            }
+
+            learnFromDemonstration(demonstration) {
+                // Pre-train Q-values using the demonstration
+                for (let i = 0; i < demonstration.length - 1; i++) {
+                    const { state, action } = demonstration[i];
+                    const nextState = demonstration[i + 1].state;
+
+                    // Give positive reward for demonstrated actions
+                    const reward = i === demonstration.length - 2 ? 100 : 1;
+
+                    const stateKey = this.getStateKey(state);
+                    if (!this.qTable[stateKey]) {
+                        this.qTable[stateKey] = new Array(this.actionSize).fill(0);
+                    }
+
+                    const nextQValues = this.getQValues(nextState);
+                    const target = reward + this.gamma * Math.max(...nextQValues);
+
+                    // Update Q-value with higher learning rate for demonstrations
+                    this.qTable[stateKey][action] +=
+                        0.1 * (target - this.qTable[stateKey][action]);
+                }
             }
 
             remember(state, action, reward, nextState, done) {
@@ -418,6 +519,12 @@
             endEpisode() {
                 this.episodes++;
                 this.replay(32);
+
+                // Gradually decrease reliance on demonstrations as AI learns
+                if (this.imitationWeight > 0.1) {
+                    this.imitationWeight *= this.imitationDecay;
+                }
+
                 this.saveProgress();
             }
 
@@ -425,7 +532,9 @@
                 const progress = {
                     qTable: this.qTable,
                     epsilon: this.epsilon,
-                    episodes: this.episodes
+                    episodes: this.episodes,
+                    demonstrations: this.demonstrations,
+                    imitationWeight: this.imitationWeight
                 };
                 try {
                     localStorage.setItem('mazeRunnerAI', JSON.stringify(progress));
@@ -442,7 +551,9 @@
                         this.qTable = progress.qTable || {};
                         this.epsilon = progress.epsilon || 1.0;
                         this.episodes = progress.episodes || 0;
-                        console.log(`Loaded AI progress: ${this.episodes} episodes, ${Math.round(this.epsilon * 100)}% randomness`);
+                        this.demonstrations = progress.demonstrations || [];
+                        this.imitationWeight = progress.imitationWeight || 1.0;
+                        console.log(`Loaded AI progress: ${this.episodes} episodes, ${this.demonstrations.length} demonstrations, ${Math.round(this.epsilon * 100)}% randomness`);
                     }
                 } catch (e) {
                     console.warn('Failed to load AI progress:', e);
@@ -454,6 +565,9 @@
                 this.epsilon = 1.0;
                 this.episodes = 0;
                 this.memory = [];
+                this.demonstrations = [];
+                this.imitationWeight = 1.0;
+                this.currentDemonstration = [];
                 try {
                     localStorage.removeItem('mazeRunnerAI');
                 } catch (e) {
@@ -693,6 +807,9 @@
                 this.ai = new Character(1, 2, '#0ff', 'AI');
                 this.gameOver = false;
 
+                // Clear current demonstration when starting new level
+                this.agent.currentDemonstration = [];
+
                 document.getElementById('playerScore').textContent = this.player.score;
                 document.getElementById('aiScore').textContent = this.ai.score;
                 document.getElementById('level').textContent = this.level;
@@ -703,12 +820,20 @@
 
             updateAIDisplay() {
                 document.getElementById('episodes').textContent = this.agent.episodes;
+                document.getElementById('demonstrations').textContent = this.agent.demonstrations.length;
 
                 const epsilonPercent = Math.round(this.agent.epsilon * 100);
                 document.getElementById('epsilon').textContent = epsilonPercent;
 
                 const modeElement = document.getElementById('aiMode');
-                if (this.agent.epsilon > 0.5) {
+
+                // Show imitation mode if AI is using demonstrations
+                if (this.agent.demonstrations.length > 0 && this.agent.imitationWeight > 0.5) {
+                    modeElement.textContent = 'IMITATING';
+                    modeElement.className = 'ai-mode';
+                    modeElement.style.background = '#0ff';
+                    modeElement.style.color = '#000';
+                } else if (this.agent.epsilon > 0.5) {
                     modeElement.textContent = 'EXPLORING';
                     modeElement.className = 'ai-mode exploring';
                 } else if (this.agent.epsilon > 0.2) {
@@ -750,17 +875,59 @@
             handlePlayerMove() {
                 if (this.player.reachedGoal) return;
 
-                let dx = 0, dy = 0;
-                if (this.keys['ArrowUp']) dy = -1;
-                else if (this.keys['ArrowDown']) dy = 1;
-                else if (this.keys['ArrowLeft']) dx = -1;
-                else if (this.keys['ArrowRight']) dx = 1;
+                let dx = 0, dy = 0, action = -1;
+                if (this.keys['ArrowUp']) { dy = -1; action = 0; }
+                else if (this.keys['ArrowDown']) { dy = 1; action = 1; }
+                else if (this.keys['ArrowLeft']) { dx = -1; action = 2; }
+                else if (this.keys['ArrowRight']) { dx = 1; action = 3; }
 
                 if (dx !== 0 || dy !== 0) {
+                    // Record state before move for AI learning
+                    const stateBefore = this.player.getState(this.maze);
+
                     this.player.move(dx, dy, this.maze);
                     document.getElementById('playerScore').textContent = this.player.score;
+
+                    // Record this move for AI to learn from
+                    this.agent.recordDemonstration(stateBefore, action);
+
+                    // If player reached goal, complete the demonstration
+                    if (this.player.reachedGoal) {
+                        this.agent.completeDemonstration(true);
+                        this.showLearningMessage();
+                    }
+
                     this.keys = {}; // Clear keys after move
                     this.checkGameOver();
+                }
+            }
+
+            showLearningMessage() {
+                // Show visual feedback that AI learned
+                const msg = document.createElement('div');
+                msg.style.position = 'absolute';
+                msg.style.top = '50%';
+                msg.style.left = '50%';
+                msg.style.transform = 'translate(-50%, -50%)';
+                msg.style.background = 'rgba(0, 255, 255, 0.95)';
+                msg.style.padding = '20px 30px';
+                msg.style.borderRadius = '10px';
+                msg.style.fontSize = '18px';
+                msg.style.fontWeight = 'bold';
+                msg.style.color = '#000';
+                msg.style.zIndex = '1000';
+                msg.style.animation = 'fadeOut 2s forwards';
+                msg.textContent = `✨ AI learned from your path! (${this.agent.demonstrations.length} demonstrations)`;
+                document.body.appendChild(msg);
+
+                setTimeout(() => msg.remove(), 2000);
+
+                // Add CSS animation if not already present
+                if (!document.getElementById('fadeOutStyle')) {
+                    const style = document.createElement('style');
+                    style.id = 'fadeOutStyle';
+                    style.textContent = '@keyframes fadeOut { 0% { opacity: 1; } 50% { opacity: 1; } 100% { opacity: 0; } }';
+                    document.head.appendChild(style);
                 }
             }
 
