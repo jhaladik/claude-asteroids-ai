@@ -1001,8 +1001,25 @@
                             this.isStuck = true;
                             this.onAIStuck();
                         }
+                    } else {
+                        // Was stuck but now moving more freely
+                        if (this.isStuck) {
+                            this.isStuck = false;
+                            this.onAIUnstuck();
+                        }
+                    }
+                } else {
+                    // AI is exploring different positions - definitely not stuck
+                    if (this.isStuck) {
+                        this.isStuck = false;
+                        this.onAIUnstuck();
                     }
                 }
+            }
+
+            onAIUnstuck() {
+                console.log('AI unstuck! Continuing exploration.');
+                this.hideSkipButton();
             }
 
             onAIStuck() {
@@ -1026,32 +1043,34 @@
                 if (!skipBtn) {
                     skipBtn = document.createElement('button');
                     skipBtn.id = 'skipAIBtn';
-                    skipBtn.textContent = 'AI is Stuck! Skip to Next Level';
+                    skipBtn.innerHTML = '⚠️ AI Stuck<br><small style="font-size: 11px;">Click to Skip</small>';
                     skipBtn.style.cssText = `
                         position: absolute;
-                        top: 50%;
-                        left: 50%;
-                        transform: translate(-50%, -50%);
-                        background: #ff4444;
+                        bottom: 240px;
+                        right: 10px;
+                        background: rgba(255, 68, 68, 0.95);
                         color: #fff;
-                        border: 3px solid #ff6666;
-                        padding: 20px 30px;
-                        font-size: 16px;
+                        border: 2px solid #ff6666;
+                        padding: 10px 15px;
+                        font-size: 13px;
                         font-weight: bold;
-                        border-radius: 10px;
+                        border-radius: 8px;
                         cursor: pointer;
                         z-index: 500;
                         font-family: 'Courier New', monospace;
-                        animation: pulse 1s infinite;
+                        box-shadow: 0 2px 8px rgba(255, 68, 68, 0.4);
+                        animation: gentlePulse 2s infinite;
+                        text-align: center;
+                        line-height: 1.3;
                     `;
                     skipBtn.onclick = () => this.skipAI();
                     document.body.appendChild(skipBtn);
 
-                    // Add pulse animation
+                    // Add gentle pulse animation
                     if (!document.getElementById('pulseStyle')) {
                         const style = document.createElement('style');
                         style.id = 'pulseStyle';
-                        style.textContent = '@keyframes pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.05); } }';
+                        style.textContent = '@keyframes gentlePulse { 0%, 100% { opacity: 0.9; box-shadow: 0 2px 8px rgba(255, 68, 68, 0.4); } 50% { opacity: 1; box-shadow: 0 2px 12px rgba(255, 68, 68, 0.6); } }';
                         document.head.appendChild(style);
                     }
                 }
