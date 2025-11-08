@@ -139,9 +139,16 @@
     <canvas id="gameCanvas"></canvas>
 
     <div id="ui">
-        <div>Score: <span id="score">0</span></div>
-        <div>Lives: <span id="lives">3</span></div>
-        <div>Level: <span id="level">1</span></div>
+        <div style="background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px;">
+            <div style="color: #fff; font-size: 20px; margin-bottom: 5px;">
+                <span style="color: #4af;">YOU:</span> <span id="score">0</span> / <span id="target">50</span>
+            </div>
+            <div style="color: #0ff; font-size: 20px; margin-bottom: 5px;">
+                <span style="color: #0ff;">AI:</span> <span id="aiScore">0</span> / <span id="aiTarget">50</span>
+            </div>
+            <div style="margin-top: 10px; color: #fff;">Lives: <span id="lives">3</span></div>
+            <div style="color: #fff;">Level: <span id="level">1</span></div>
+        </div>
     </div>
 
     <div id="controls">
@@ -156,8 +163,10 @@
     </div>
 
     <div id="gameOver">
-        <h1>GAME OVER</h1>
-        <p>Final Score: <span id="finalScore">0</span></p>
+        <h1 id="resultTitle">GAME OVER</h1>
+        <p id="resultMessage" style="font-size: 24px; margin-bottom: 10px;"></p>
+        <p>Your Score: <span id="finalScore">0</span></p>
+        <p>AI Score: <span id="finalAiScore">0</span></p>
         <p>Level Reached: <span id="finalLevel">1</span></p>
         <button onclick="game.restart()">Play Again</button>
     </div>
@@ -192,13 +201,14 @@
 
         // Game classes
         class Ship {
-            constructor(x, y) {
+            constructor(x, y, color = '#fff') {
                 this.x = x;
                 this.y = y;
                 this.angle = -Math.PI / 2; // Point upward
                 this.velocity = { x: 0, y: 0 };
                 this.size = 15;
                 this.invulnerable = 0;
+                this.color = color;
             }
 
             update() {
@@ -228,7 +238,7 @@
                     ctx.globalAlpha = 0.5;
                 }
 
-                ctx.strokeStyle = '#fff';
+                ctx.strokeStyle = this.color;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(this.size, 0);
@@ -239,6 +249,94 @@
                 ctx.stroke();
 
                 ctx.restore();
+            }
+        }
+
+        // AI Ship with autonomous behavior
+        class AIShip extends Ship {
+            constructor(x, y) {
+                super(x, y, '#0ff'); // Cyan color for AI
+                this.target = null;
+                this.fireTimer = 0;
+                this.thinkTimer = 0;
+            }
+
+            think(asteroids) {
+                // Re-evaluate target every 30 frames
+                if (this.thinkTimer <= 0) {
+                    this.findTarget(asteroids);
+                    this.thinkTimer = 30;
+                }
+                this.thinkTimer--;
+            }
+
+            findTarget(asteroids) {
+                if (asteroids.length === 0) {
+                    this.target = null;
+                    return;
+                }
+
+                // Find nearest asteroid
+                let nearest = null;
+                let minDist = Infinity;
+
+                for (let asteroid of asteroids) {
+                    const dx = asteroid.x - this.x;
+                    const dy = asteroid.y - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = asteroid;
+                    }
+                }
+
+                this.target = nearest;
+            }
+
+            updateAI(asteroids) {
+                this.think(asteroids);
+
+                if (!this.target) return null;
+
+                // Calculate angle to target
+                const dx = this.target.x - this.x;
+                const dy = this.target.y - this.y;
+                const targetAngle = Math.atan2(dy, dx);
+
+                // Rotate towards target
+                let angleDiff = targetAngle - this.angle;
+                // Normalize angle difference to -PI to PI
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+                if (Math.abs(angleDiff) > 0.1) {
+                    this.rotate(angleDiff > 0 ? 1 : -1);
+                }
+
+                // Thrust towards target if far away
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > 200) {
+                    this.thrust();
+                }
+
+                // Fire when aligned with target
+                this.fireTimer--;
+                if (Math.abs(angleDiff) < 0.3 && this.fireTimer <= 0) {
+                    this.fireTimer = 20; // Fire every 20 frames when aligned
+                    return this.createBullet();
+                }
+
+                return null;
+            }
+
+            createBullet() {
+                return new Bullet(
+                    this.x + Math.cos(this.angle) * this.size,
+                    this.y + Math.sin(this.angle) * this.size,
+                    this.angle,
+                    '#0ff' // Cyan bullets for AI
+                );
             }
         }
 
@@ -316,7 +414,7 @@
         }
 
         class Bullet {
-            constructor(x, y, angle) {
+            constructor(x, y, angle, color = '#0f0') {
                 this.x = x;
                 this.y = y;
                 this.velocity = {
@@ -324,6 +422,8 @@
                     y: Math.sin(angle) * config.bulletSpeed
                 };
                 this.lifetime = config.bulletLifetime;
+                this.color = color;
+                this.owner = color === '#0ff' ? 'ai' : 'player'; // Track who shot it
             }
 
             update() {
@@ -333,7 +433,7 @@
             }
 
             draw() {
-                ctx.fillStyle = '#0f0';
+                ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
                 ctx.fill();
@@ -385,13 +485,17 @@
         class Game {
             constructor() {
                 this.ship = null;
+                this.aiShip = null;
                 this.asteroids = [];
                 this.bullets = [];
                 this.particles = [];
                 this.score = 0;
+                this.aiScore = 0;
+                this.targetScore = 50;
                 this.lives = 3;
                 this.level = 1;
                 this.gameOver = false;
+                this.winner = null;
                 this.keys = {};
                 this.touches = {};
 
@@ -402,10 +506,15 @@
 
             init() {
                 this.ship = new Ship(canvas.width / 2, canvas.height / 2);
+                this.aiShip = new AIShip(canvas.width / 4, canvas.height / 4);
                 this.asteroids = [];
                 this.bullets = [];
                 this.particles = [];
                 this.spawnAsteroids(config.initialAsteroids + this.level - 1);
+
+                // Update UI
+                document.getElementById('target').textContent = this.targetScore;
+                document.getElementById('aiTarget').textContent = this.targetScore;
             }
 
             spawnAsteroids(count) {
@@ -516,9 +625,15 @@
                             // Remove bullet
                             this.bullets.splice(i, 1);
 
-                            // Update score
-                            this.score += Math.floor(asteroid.size);
-                            document.getElementById('score').textContent = this.score;
+                            // Update score based on who shot it
+                            const points = Math.floor(asteroid.size);
+                            if (bullet.owner === 'ai') {
+                                this.aiScore += points;
+                                document.getElementById('aiScore').textContent = this.aiScore;
+                            } else {
+                                this.score += points;
+                                document.getElementById('score').textContent = this.score;
+                            }
 
                             break;
                         }
@@ -560,6 +675,13 @@
                 this.handleInput();
 
                 this.ship.update();
+                this.aiShip.update();
+
+                // AI decision making
+                const aiBullet = this.aiShip.updateAI(this.asteroids);
+                if (aiBullet) {
+                    this.bullets.push(aiBullet);
+                }
 
                 this.asteroids.forEach(a => a.update());
 
@@ -575,10 +697,22 @@
 
                 this.checkCollisions();
 
-                // Level progression
-                if (this.asteroids.length === 0) {
+                // Check for target score reached
+                if (this.score >= this.targetScore) {
+                    this.winner = 'player';
+                    this.endGame();
+                } else if (this.aiScore >= this.targetScore) {
+                    this.winner = 'ai';
+                    this.endGame();
+                }
+
+                // Level progression - when all asteroids cleared
+                if (this.asteroids.length === 0 && !this.gameOver) {
                     this.level++;
+                    this.targetScore += 30; // Increase target for next level
                     document.getElementById('level').textContent = this.level;
+                    document.getElementById('target').textContent = this.targetScore;
+                    document.getElementById('aiTarget').textContent = this.targetScore;
                     this.spawnAsteroids(config.initialAsteroids + this.level - 1);
                     this.ship.invulnerable = 120;
                 }
@@ -602,6 +736,19 @@
                 this.asteroids.forEach(a => a.draw());
                 this.bullets.forEach(b => b.draw());
                 this.ship.draw();
+                this.aiShip.draw();
+
+                // Draw AI target indicator
+                if (this.aiShip.target) {
+                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.moveTo(this.aiShip.x, this.aiShip.y);
+                    ctx.lineTo(this.aiShip.target.x, this.aiShip.target.y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
             }
 
             gameLoop() {
@@ -613,16 +760,39 @@
             endGame() {
                 this.gameOver = true;
                 document.getElementById('finalScore').textContent = this.score;
+                document.getElementById('finalAiScore').textContent = this.aiScore;
                 document.getElementById('finalLevel').textContent = this.level;
+
+                const titleElement = document.getElementById('resultTitle');
+                const messageElement = document.getElementById('resultMessage');
+
+                if (this.winner === 'player') {
+                    titleElement.textContent = 'YOU WIN!';
+                    titleElement.style.color = '#4af';
+                    messageElement.textContent = '🎉 You beat the AI!';
+                } else if (this.winner === 'ai') {
+                    titleElement.textContent = 'AI WINS!';
+                    titleElement.style.color = '#0ff';
+                    messageElement.textContent = '🤖 The AI was faster!';
+                } else {
+                    titleElement.textContent = 'GAME OVER';
+                    titleElement.style.color = '#f44';
+                    messageElement.textContent = 'You ran out of lives!';
+                }
+
                 document.getElementById('gameOver').style.display = 'block';
             }
 
             restart() {
                 this.score = 0;
+                this.aiScore = 0;
+                this.targetScore = 50;
                 this.lives = 3;
                 this.level = 1;
                 this.gameOver = false;
+                this.winner = null;
                 document.getElementById('score').textContent = this.score;
+                document.getElementById('aiScore').textContent = this.aiScore;
                 document.getElementById('lives').textContent = this.lives;
                 document.getElementById('level').textContent = this.level;
                 document.getElementById('gameOver').style.display = 'none';
