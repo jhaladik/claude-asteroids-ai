@@ -306,6 +306,13 @@
                         <span class="tooltiptext">Number of unique game situations the AI has learned about. More states = more experience!</span>
                     </div>
                 </div>
+                <div class="ai-learning">
+                    🧮 Complexity: <span id="complexity">0</span>/100 <span id="splitIndicator"></span>
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Environment complexity score based on gems, walls, and maze size. Above 40 = AI should consider splitting attention into specialized agents (Explorer + Collector).</span>
+                    </div>
+                </div>
                 <div style="margin-top: 8px; text-align: center;">
                     <button onclick="game.downloadLearningData()" style="background: #0a0; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace; margin: 2px;">
                         💾 Download Data
@@ -687,6 +694,44 @@
                 return false;
             }
 
+            // Calculate environment complexity to determine if AI should split attention
+            calculateComplexity() {
+                let gemCount = 0;
+                let wallCount = 0;
+                let emptyCount = 0;
+
+                for (let y = 0; y < this.size; y++) {
+                    for (let x = 0; x < this.size; x++) {
+                        const cell = this.grid[y][x];
+                        if (cell === 1) wallCount++;
+                        else if (cell === 2) gemCount++;
+                        else if (cell === 0) emptyCount++;
+                    }
+                }
+
+                const totalCells = this.size * this.size;
+                const wallDensity = wallCount / totalCells;
+                const gemDensity = gemCount / totalCells;
+
+                // Complexity score (0-100)
+                // High complexity = many gems + high wall density + large maze
+                const complexityScore = (
+                    (gemCount * 5) +                    // More gems = more complexity (0-50 points)
+                    (wallDensity * 30) +                // More walls = harder navigation (0-30 points)
+                    (this.size / 15 * 20)               // Bigger maze = more complex (0-20 points)
+                );
+
+                return {
+                    score: Math.min(Math.round(complexityScore), 100),
+                    gemCount,
+                    wallCount,
+                    wallDensity: Math.round(wallDensity * 100),
+                    gemDensity: Math.round(gemDensity * 100),
+                    mazeSize: this.size,
+                    recommendSplit: complexityScore > 40 // Threshold for splitting
+                };
+            }
+
             draw() {
                 for (let y = 0; y < this.size; y++) {
                     for (let x = 0; x < this.size; x++) {
@@ -764,15 +809,19 @@
             }
 
             getState(maze) {
-                // IMPROVED: Relative state that transfers across different mazes!
-                // Goal is always at (maze.size - 2, maze.size - 2)
+                // OPTIMIZED: Directional state for MUCH smaller Q-table!
+                // Instead of exact distance (15x15=225 combos), use direction (-1,0,1 = only 9 combos)
                 const goalX = maze.size - 2;
                 const goalY = maze.size - 2;
 
+                // Convert exact distance to simple direction
+                const directionX = this.x < goalX ? 1 : (this.x > goalX ? -1 : 0); // -1=west, 0=at goal, 1=east
+                const directionY = this.y < goalY ? 1 : (this.y > goalY ? -1 : 0); // -1=north, 0=at goal, 1=south
+
                 const state = [
-                    // Relative distance to goal (transferable!)
-                    goalX - this.x,  // How far right to goal
-                    goalY - this.y,  // How far down to goal
+                    // Direction to goal (only 9 combinations instead of 225!)
+                    directionX,  // Goal is left(-1), here(0), or right(1)
+                    directionY,  // Goal is up(-1), here(0), or down(1)
 
                     // Local walls (transferable pattern!)
                     maze.isWall(this.x, this.y - 1) ? 1 : 0, // Wall up?
@@ -856,6 +905,15 @@
                 this.aiMoveInterval = this.normalAISpeed;
                 this.hideSkipButton();
 
+                // Calculate environment complexity
+                this.complexity = this.maze.calculateComplexity();
+                console.log('Environment complexity:', this.complexity);
+
+                // Check if AI should split attention
+                if (this.complexity.recommendSplit) {
+                    console.log('⚠️ High complexity detected! AI should consider splitting into multiple agents.');
+                }
+
                 document.getElementById('playerScore').textContent = this.player.score;
                 document.getElementById('aiScore').textContent = this.ai.score;
                 document.getElementById('level').textContent = this.level;
@@ -874,6 +932,20 @@
                 // Update Q-table size
                 const qtableSize = Object.keys(this.agent.qTable).length;
                 document.getElementById('qtableSize').textContent = qtableSize;
+
+                // Update complexity display
+                if (this.complexity) {
+                    document.getElementById('complexity').textContent = this.complexity.score;
+                    const splitIndicator = document.getElementById('splitIndicator');
+
+                    if (this.complexity.recommendSplit) {
+                        splitIndicator.innerHTML = '<span style="color: #ff0; font-weight: bold;">⚡ SPLIT!</span>';
+                        splitIndicator.title = `Complexity ${this.complexity.score} > 40. AI should split into Explorer + Collector agents.`;
+                    } else {
+                        splitIndicator.innerHTML = '<span style="color: #0f0;">✓ Simple</span>';
+                        splitIndicator.title = `Complexity ${this.complexity.score} ≤ 40. Single agent is efficient.`;
+                    }
+                }
 
                 const modeElement = document.getElementById('aiMode');
 
