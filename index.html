@@ -619,6 +619,197 @@
             }
         }
 
+        // ExplorerAgent: Specialized for fast maze mapping (ignores gems)
+        class ExplorerAgent extends DQNAgent {
+            constructor() {
+                super(7, 4); // Simplified state: 7 features (no gem info), 4 actions
+                this.agentType = 'EXPLORER';
+                this.epsilonDecay = 0.96; // Slightly faster learning for exploration
+            }
+
+            saveProgress() {
+                const progress = {
+                    qTable: this.qTable,
+                    epsilon: this.epsilon,
+                    episodes: this.episodes,
+                    demonstrations: this.demonstrations,
+                    imitationWeight: this.imitationWeight
+                };
+                try {
+                    localStorage.setItem('mazeRunnerExplorer', JSON.stringify(progress));
+                } catch (e) {
+                    console.warn('Failed to save Explorer progress:', e);
+                }
+            }
+
+            loadProgress() {
+                try {
+                    const saved = localStorage.getItem('mazeRunnerExplorer');
+                    if (saved) {
+                        const progress = JSON.parse(saved);
+                        this.qTable = progress.qTable || {};
+                        this.epsilon = progress.epsilon || 1.0;
+                        this.episodes = progress.episodes || 0;
+                        this.demonstrations = progress.demonstrations || [];
+                        this.imitationWeight = progress.imitationWeight || 1.0;
+                        console.log(`🗺️ Loaded Explorer: ${this.episodes} episodes, ${Math.round(this.epsilon * 100)}% randomness`);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load Explorer progress:', e);
+                }
+            }
+
+            resetProgress() {
+                super.resetProgress();
+                try {
+                    localStorage.removeItem('mazeRunnerExplorer');
+                } catch (e) {
+                    console.warn('Failed to clear Explorer progress:', e);
+                }
+            }
+        }
+
+        // CollectorAgent: Specialized for gem collection optimization
+        class CollectorAgent extends DQNAgent {
+            constructor() {
+                super(11, 4); // Full state: 11 features (includes gems), 4 actions
+                this.agentType = 'COLLECTOR';
+                this.epsilonDecay = 0.98; // Standard learning rate
+            }
+
+            saveProgress() {
+                const progress = {
+                    qTable: this.qTable,
+                    epsilon: this.epsilon,
+                    episodes: this.episodes,
+                    demonstrations: this.demonstrations,
+                    imitationWeight: this.imitationWeight
+                };
+                try {
+                    localStorage.setItem('mazeRunnerCollector', JSON.stringify(progress));
+                } catch (e) {
+                    console.warn('Failed to save Collector progress:', e);
+                }
+            }
+
+            loadProgress() {
+                try {
+                    const saved = localStorage.getItem('mazeRunnerCollector');
+                    if (saved) {
+                        const progress = JSON.parse(saved);
+                        this.qTable = progress.qTable || {};
+                        this.epsilon = progress.epsilon || 1.0;
+                        this.episodes = progress.episodes || 0;
+                        this.demonstrations = progress.demonstrations || [];
+                        this.imitationWeight = progress.imitationWeight || 1.0;
+                        console.log(`💎 Loaded Collector: ${this.episodes} episodes, ${Math.round(this.epsilon * 100)}% randomness`);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load Collector progress:', e);
+                }
+            }
+
+            resetProgress() {
+                super.resetProgress();
+                try {
+                    localStorage.removeItem('mazeRunnerCollector');
+                } catch (e) {
+                    console.warn('Failed to clear Collector progress:', e);
+                }
+            }
+        }
+
+        // AgentCoordinator: Manages multi-agent system
+        class AgentCoordinator {
+            constructor(complexity) {
+                this.explorer = new ExplorerAgent();
+                this.collector = new CollectorAgent();
+                this.complexity = complexity;
+                this.activeAgent = null;
+                this.splitMode = complexity.recommendSplit;
+
+                // Performance tracking
+                this.explorerSuccesses = 0;
+                this.collectorSuccesses = 0;
+
+                // Determine initial agent based on complexity
+                if (this.splitMode) {
+                    // High complexity: Start with explorer to map maze
+                    this.activeAgent = this.explorer;
+                    console.log('🧠 Multi-agent mode activated! Starting with EXPLORER');
+                    console.log(`   Complexity: ${complexity.score}/100 (${complexity.gemCount} gems, ${complexity.wallDensity}% walls)`);
+                } else {
+                    // Low complexity: Use collector (standard mode)
+                    this.activeAgent = this.collector;
+                    console.log('🧠 Single-agent mode: Using COLLECTOR');
+                }
+            }
+
+            getActiveAgent() {
+                return this.activeAgent;
+            }
+
+            getActiveAgentType() {
+                return this.activeAgent.agentType;
+            }
+
+            // Switch agent based on learning progress
+            switchAgent() {
+                if (!this.splitMode) return; // Don't switch in single-agent mode
+
+                const explorerLearned = this.explorer.epsilon < 0.3 && this.explorer.episodes > 10;
+                const collectorNeedsHelp = this.collector.epsilon > 0.5 || this.collector.episodes < 5;
+
+                // Switch from explorer to collector once maze is mapped
+                if (this.activeAgent === this.explorer && explorerLearned) {
+                    this.activeAgent = this.collector;
+                    console.log('🔄 Switching to COLLECTOR (maze mapped)');
+                    return 'COLLECTOR';
+                }
+
+                // Switch back to explorer if collector is struggling
+                if (this.activeAgent === this.collector && collectorNeedsHelp && !explorerLearned) {
+                    this.activeAgent = this.explorer;
+                    console.log('🔄 Switching back to EXPLORER (collector needs more map data)');
+                    return 'EXPLORER';
+                }
+
+                return this.activeAgent.agentType;
+            }
+
+            // Record success for active agent
+            recordSuccess() {
+                if (this.activeAgent === this.explorer) {
+                    this.explorerSuccesses++;
+                } else {
+                    this.collectorSuccesses++;
+                }
+            }
+
+            // Get combined statistics
+            getCombinedStats() {
+                return {
+                    totalEpisodes: this.explorer.episodes + this.collector.episodes,
+                    explorerEpisodes: this.explorer.episodes,
+                    collectorEpisodes: this.collector.episodes,
+                    explorerEpsilon: this.explorer.epsilon,
+                    collectorEpsilon: this.collector.epsilon,
+                    explorerQTable: this.explorer.getQTableSize(),
+                    collectorQTable: this.collector.getQTableSize(),
+                    totalQTable: this.explorer.getQTableSize() + this.collector.getQTableSize(),
+                    splitMode: this.splitMode,
+                    activeAgent: this.activeAgent.agentType
+                };
+            }
+
+            resetAll() {
+                this.explorer.resetProgress();
+                this.collector.resetProgress();
+                this.explorerSuccesses = 0;
+                this.collectorSuccesses = 0;
+            }
+        }
+
         // Game Configuration
         const config = {
             gridSize: 15,
@@ -858,6 +1049,32 @@
                 return state;
             }
 
+            getExplorerState(maze) {
+                // SIMPLIFIED state for ExplorerAgent: NO gem info, focus on navigation!
+                // Only 7 features → even smaller Q-table → faster learning
+                const goalX = maze.size - 2;
+                const goalY = maze.size - 2;
+
+                const directionX = this.x < goalX ? 1 : (this.x > goalX ? -1 : 0);
+                const directionY = this.y < goalY ? 1 : (this.y > goalY ? -1 : 0);
+
+                const state = [
+                    // Direction to goal
+                    directionX,
+                    directionY,
+
+                    // Local walls only (no gem info!)
+                    maze.isWall(this.x, this.y - 1) ? 1 : 0,
+                    maze.isWall(this.x, this.y + 1) ? 1 : 0,
+                    maze.isWall(this.x - 1, this.y) ? 1 : 0,
+                    maze.isWall(this.x + 1, this.y) ? 1 : 0,
+
+                    // Distance category (close, medium, far)
+                    Math.min(Math.floor((Math.abs(this.x - goalX) + Math.abs(this.y - goalY)) / 5), 2)
+                ];
+                return state;
+            }
+
             draw() {
                 const px = this.x * config.cellSize;
                 const py = this.y * config.cellSize;
@@ -887,7 +1104,7 @@
                 this.maze = null;
                 this.player = null;
                 this.ai = null;
-                this.agent = new DQNAgent(11, 4); // 11 state features (relative + local), 4 actions
+                this.coordinator = null; // Will be created in init() based on complexity
                 this.level = 1;
                 this.gameOver = false;
                 this.keys = {};
@@ -939,23 +1156,33 @@
                 this.ai = new Character(1, 2, '#0ff', 'AI');
                 this.gameOver = false;
 
+                // Calculate environment complexity
+                this.complexity = this.maze.calculateComplexity();
+                console.log('Environment complexity:', this.complexity);
+
+                // Create AgentCoordinator (on first init) or reuse existing one
+                if (!this.coordinator) {
+                    this.coordinator = new AgentCoordinator(this.complexity);
+                } else {
+                    // Update coordinator with new complexity for this level
+                    this.coordinator.complexity = this.complexity;
+                    this.coordinator.splitMode = this.complexity.recommendSplit;
+
+                    // Re-evaluate which agent should be active
+                    if (this.coordinator.splitMode) {
+                        // Check if we should switch agents
+                        this.coordinator.switchAgent();
+                    }
+                }
+
                 // Clear current demonstration when starting new level
-                this.agent.currentDemonstration = [];
+                this.coordinator.getActiveAgent().currentDemonstration = [];
 
                 // Reset stuck detection
                 this.aiPositionHistory = [];
                 this.isStuck = false;
                 this.aiMoveInterval = this.normalAISpeed;
                 this.hideSkipButton();
-
-                // Calculate environment complexity
-                this.complexity = this.maze.calculateComplexity();
-                console.log('Environment complexity:', this.complexity);
-
-                // Check if AI should split attention
-                if (this.complexity.recommendSplit) {
-                    console.log('⚠️ High complexity detected! AI should consider splitting into multiple agents.');
-                }
 
                 this.dom.playerScore.textContent = this.player.score;
                 this.dom.aiScore.textContent = this.ai.score;
@@ -966,31 +1193,43 @@
             }
 
             updateAIDisplay() {
-                this.dom.episodes.textContent = this.agent.episodes;
-                this.dom.demonstrations.textContent = this.agent.demonstrations.length;
+                const activeAgent = this.coordinator.getActiveAgent();
+                const stats = this.coordinator.getCombinedStats();
 
-                const epsilonPercent = Math.round(this.agent.epsilon * 100);
+                // Show active agent type in front of mode
+                const agentType = stats.splitMode ?
+                    `<span style="color: ${stats.activeAgent === 'EXPLORER' ? '#ff0' : '#0f0'}; font-weight: bold;">${stats.activeAgent}</span> ` :
+                    '';
+
+                this.dom.episodes.textContent = stats.totalEpisodes;
+                this.dom.demonstrations.textContent = activeAgent.demonstrations.length;
+
+                const epsilonPercent = Math.round(activeAgent.epsilon * 100);
                 this.dom.epsilon.textContent = epsilonPercent;
 
-                // Update Q-table size
-                this.dom.qtableSize.textContent = this.agent.getQTableSize();
+                // Update Q-table size (show combined if split mode)
+                if (stats.splitMode) {
+                    this.dom.qtableSize.textContent = `${stats.totalQTable} (E:${stats.explorerQTable} C:${stats.collectorQTable})`;
+                } else {
+                    this.dom.qtableSize.textContent = stats.totalQTable;
+                }
 
                 // Update complexity display
                 if (this.complexity) {
                     this.dom.complexity.textContent = this.complexity.score;
 
                     if (this.complexity.recommendSplit) {
-                        this.dom.splitIndicator.innerHTML = '<span style="color: #ff0; font-weight: bold;">⚡ SPLIT!</span>';
-                        this.dom.splitIndicator.title = `Complexity ${this.complexity.score} > 40. AI should split into Explorer + Collector agents.`;
+                        this.dom.splitIndicator.innerHTML = `<span style="color: #ff0; font-weight: bold;">⚡ ${stats.activeAgent}</span>`;
+                        this.dom.splitIndicator.title = `Multi-agent mode! ${stats.activeAgent} is currently active. Explorer episodes: ${stats.explorerEpisodes}, Collector episodes: ${stats.collectorEpisodes}`;
                     } else {
-                        this.dom.splitIndicator.innerHTML = '<span style="color: #0f0;">✓ Simple</span>';
-                        this.dom.splitIndicator.title = `Complexity ${this.complexity.score} ≤ 40. Single agent is efficient.`;
+                        this.dom.splitIndicator.innerHTML = '<span style="color: #0f0;">✓ Single</span>';
+                        this.dom.splitIndicator.title = `Complexity ${this.complexity.score} ≤ 40. Single agent (COLLECTOR) mode.`;
                     }
                 }
 
-                // Use centralized AI mode determination
-                const aiMode = this.agent.getAIMode();
-                this.dom.aiMode.textContent = aiMode;
+                // Use centralized AI mode determination with agent type prefix
+                const aiMode = activeAgent.getAIMode();
+                this.dom.aiMode.innerHTML = agentType + aiMode;
 
                 // Set mode-specific styling
                 if (aiMode === 'IMITATING') {
@@ -1007,7 +1246,7 @@
                     this.dom.aiMode.className = 'ai-mode exploiting';
                 }
 
-                const progress = Math.min(100, (this.agent.episodes / 50) * 100);
+                const progress = Math.min(100, (stats.totalEpisodes / 50) * 100);
                 this.dom.aiProgress.style.width = progress + '%';
             }
 
@@ -1049,12 +1288,13 @@
                     this.player.move(dx, dy, this.maze);
                     this.dom.playerScore.textContent = this.player.score;
 
-                    // Record this move for AI to learn from
-                    this.agent.recordDemonstration(stateBefore, action);
+                    // Record this move for AI to learn from (for both agents!)
+                    const activeAgent = this.coordinator.getActiveAgent();
+                    activeAgent.recordDemonstration(stateBefore, action);
 
                     // If player reached goal, complete the demonstration
                     if (this.player.reachedGoal) {
-                        this.agent.completeDemonstration(true);
+                        activeAgent.completeDemonstration(true);
                         this.showLearningMessage();
 
                         // Speed up AI so player doesn't have to wait
@@ -1068,6 +1308,7 @@
 
             showLearningMessage() {
                 // Show visual feedback that AI learned
+                const activeAgent = this.coordinator.getActiveAgent();
                 const msg = document.createElement('div');
                 msg.style.position = 'absolute';
                 msg.style.top = '50%';
@@ -1081,7 +1322,7 @@
                 msg.style.color = '#000';
                 msg.style.zIndex = '1000';
                 msg.style.animation = 'fadeOut 2s forwards';
-                msg.textContent = `✨ AI learned from your path! (${this.agent.demonstrations.length} demonstrations)`;
+                msg.textContent = `✨ AI learned from your path! (${activeAgent.demonstrations.length} demonstrations)`;
                 document.body.appendChild(msg);
 
                 setTimeout(() => msg.remove(), 2000);
@@ -1098,17 +1339,22 @@
             updateAI() {
                 if (this.ai.reachedGoal) return;
 
-                const state = this.ai.getState(this.maze);
-                const action = this.agent.act(state);
+                // Get active agent and use appropriate state representation
+                const activeAgent = this.coordinator.getActiveAgent();
+                const isExplorer = activeAgent.agentType === 'EXPLORER';
+
+                // Use simplified state for Explorer, full state for Collector
+                const state = isExplorer ? this.ai.getExplorerState(this.maze) : this.ai.getState(this.maze);
+                const action = activeAgent.act(state);
 
                 const moves = [[0, -1], [0, 1], [-1, 0], [1, 0]]; // Up, Down, Left, Right
                 const [dx, dy] = moves[action];
 
                 const reward = this.ai.move(dx, dy, this.maze);
-                const nextState = this.ai.getState(this.maze);
+                const nextState = isExplorer ? this.ai.getExplorerState(this.maze) : this.ai.getState(this.maze);
                 const done = this.ai.reachedGoal;
 
-                this.agent.remember(state, action, reward, nextState, done);
+                activeAgent.remember(state, action, reward, nextState, done);
 
                 // Track AI position for stuck detection
                 this.aiPositionHistory.push({ x: this.ai.x, y: this.ai.y });
@@ -1120,7 +1366,14 @@
                 this.checkIfStuck();
 
                 if (done) {
-                    this.agent.endEpisode();
+                    activeAgent.endEpisode();
+                    this.coordinator.recordSuccess();
+
+                    // Check if we should switch agents based on learning progress
+                    const newAgent = this.coordinator.switchAgent();
+                    if (newAgent && newAgent !== activeAgent.agentType) {
+                        console.log(`🔄 Agent switched to ${newAgent}`);
+                    }
                 }
 
                 this.dom.aiScore.textContent = this.ai.score;
@@ -1174,11 +1427,12 @@
 
                 // Give AI negative feedback about being stuck
                 if (this.aiPositionHistory.length >= 2) {
-                    const lastPos = this.aiPositionHistory[this.aiPositionHistory.length - 1];
-                    const state = this.ai.getState(this.maze);
+                    const activeAgent = this.coordinator.getActiveAgent();
+                    const isExplorer = activeAgent.agentType === 'EXPLORER';
+                    const state = isExplorer ? this.ai.getExplorerState(this.maze) : this.ai.getState(this.maze);
 
                     // Mark this pattern as bad
-                    this.agent.remember(state, -1, -50, state, false); // Big negative reward
+                    activeAgent.remember(state, -1, -50, state, false); // Big negative reward
                 }
 
                 // Show skip button
@@ -1277,26 +1531,36 @@
                 this.dom.finalPlayerScore.textContent = this.player.score;
                 this.dom.finalAiScore.textContent = this.ai.score;
 
-                // Update AI learning statistics
-                this.dom.finalDemonstrations.textContent = this.agent.demonstrations.length;
-                this.dom.finalEpisodes.textContent = this.agent.episodes;
-                this.dom.finalEpsilon.textContent = Math.round(this.agent.epsilon * 100);
-                this.dom.finalQTableSize.textContent = this.agent.getQTableSize();
+                // Update AI learning statistics (from coordinator)
+                const activeAgent = this.coordinator.getActiveAgent();
+                const stats = this.coordinator.getCombinedStats();
 
-                // Use centralized AI mode determination
-                this.dom.finalAIMode.textContent = this.agent.getAIMode();
+                this.dom.finalDemonstrations.textContent = activeAgent.demonstrations.length;
+                this.dom.finalEpisodes.textContent = stats.totalEpisodes;
+                this.dom.finalEpsilon.textContent = Math.round(activeAgent.epsilon * 100);
+
+                // Show combined Q-table size if split mode
+                if (stats.splitMode) {
+                    this.dom.finalQTableSize.textContent = `${stats.totalQTable} (E:${stats.explorerQTable} C:${stats.collectorQTable})`;
+                } else {
+                    this.dom.finalQTableSize.textContent = stats.totalQTable;
+                }
+
+                // Use centralized AI mode determination with agent type
+                const agentPrefix = stats.splitMode ? `${stats.activeAgent} ` : '';
+                this.dom.finalAIMode.textContent = agentPrefix + activeAgent.getAIMode();
 
                 // Generate progress message
-                if (this.agent.episodes >= 50) {
+                if (stats.totalEpisodes >= 50) {
                     this.dom.aiProgressMessage.textContent = '🎓 AI has completed maximum training games!';
                     this.dom.aiProgressMessage.style.color = '#0f0';
-                } else if (this.agent.demonstrations.length === 0) {
+                } else if (activeAgent.demonstrations.length === 0) {
                     this.dom.aiProgressMessage.textContent = '💡 Teach the AI by showing it how to reach the goal!';
                     this.dom.aiProgressMessage.style.color = '#ff0';
-                } else if (this.agent.demonstrations.length < 5) {
+                } else if (activeAgent.demonstrations.length < 5) {
                     this.dom.aiProgressMessage.textContent = '📚 More demonstrations will help the AI learn faster!';
                     this.dom.aiProgressMessage.style.color = '#0ff';
-                } else if (this.agent.epsilon < 0.2) {
+                } else if (activeAgent.epsilon < 0.2) {
                     this.dom.aiProgressMessage.textContent = '🌟 AI is getting smart! Keep training for mastery!';
                     this.dom.aiProgressMessage.style.color = '#0f0';
                 } else {
@@ -1329,59 +1593,65 @@
 
             restart() {
                 this.level = 1;
-                this.agent = new DQNAgent(11, 4); // Reset AI with new state representation
+                this.coordinator = null; // Reset coordinator (will be recreated in init())
                 this.dom.modal.style.display = 'none';
                 this.init();
             }
 
             resetAI() {
                 if (confirm('Reset AI brain? This will erase all learned knowledge and start training from scratch.')) {
-                    this.agent.resetProgress();
+                    this.coordinator.resetAll();
                     this.updateAIDisplay();
-                    alert('AI brain reset! The AI will start learning from zero.');
+                    alert('AI brain reset! Both Explorer and Collector agents will start learning from zero.');
                 }
             }
 
             downloadLearningData() {
-                // Gather comprehensive learning data
+                // Gather comprehensive learning data from multi-agent system
+                const stats = this.coordinator.getCombinedStats();
+                const activeAgent = this.coordinator.getActiveAgent();
+                const explorer = this.coordinator.explorer;
+                const collector = this.coordinator.collector;
+
                 const learningData = {
                     metadata: {
                         exportDate: new Date().toISOString(),
-                        gameVersion: '1.0',
-                        level: this.level
+                        gameVersion: '2.0-MultiAgent',
+                        level: this.level,
+                        multiAgentMode: stats.splitMode,
+                        activeAgent: stats.activeAgent,
+                        complexityScore: this.complexity.score
                     },
-                    aiProgress: {
-                        episodes: this.agent.episodes,
-                        epsilon: this.agent.epsilon,
-                        imitationWeight: this.agent.imitationWeight,
-                        epsilonDecay: this.agent.epsilonDecay,
-                        epsilonMin: this.agent.epsilonMin
+                    explorerAgent: {
+                        episodes: explorer.episodes,
+                        epsilon: explorer.epsilon,
+                        imitationWeight: explorer.imitationWeight,
+                        qTableSize: explorer.getQTableSize(),
+                        qTable: explorer.qTable,
+                        demonstrations: explorer.demonstrations.length,
+                        epsilonDecay: explorer.epsilonDecay
                     },
-                    qTable: this.agent.qTable,
-                    qTableStats: {
-                        totalStates: this.agent.getQTableSize(),
-                        totalQValues: this.agent.getQTableSize() * this.agent.actionSize,
-                        sampleStates: Object.keys(this.agent.qTable).slice(0, 5)
+                    collectorAgent: {
+                        episodes: collector.episodes,
+                        epsilon: collector.epsilon,
+                        imitationWeight: collector.imitationWeight,
+                        qTableSize: collector.getQTableSize(),
+                        qTable: collector.qTable,
+                        demonstrations: collector.demonstrations.length,
+                        epsilonDecay: collector.epsilonDecay
                     },
-                    demonstrations: this.agent.demonstrations,
-                    demonstrationStats: {
-                        count: this.agent.demonstrations.length,
-                        maxDemonstrations: this.agent.maxDemonstrations,
-                        averagePathLength: this.agent.demonstrations.length > 0
-                            ? this.agent.demonstrations.reduce((sum, demo) => sum + demo.length, 0) / this.agent.demonstrations.length
-                            : 0
+                    combinedStats: {
+                        totalEpisodes: stats.totalEpisodes,
+                        totalQTableSize: stats.totalQTable,
+                        explorerSuccesses: this.coordinator.explorerSuccesses,
+                        collectorSuccesses: this.coordinator.collectorSuccesses
                     },
-                    hyperparameters: {
-                        gamma: this.agent.gamma,
-                        learningRate: this.agent.learningRate,
-                        epsilonDecay: this.agent.epsilonDecay,
-                        epsilonMin: this.agent.epsilonMin,
-                        imitationDecay: this.agent.imitationDecay
-                    },
+                    complexity: this.complexity,
                     analysis: {
-                        expectedEpsilonAfter50Games: Math.pow(this.agent.epsilonDecay, 50),
-                        currentRandomnessPercent: Math.round(this.agent.epsilon * 100),
-                        learningPhase: this.agent.epsilon > 0.5 ? 'EXPLORING' : this.agent.epsilon > 0.2 ? 'LEARNING' : 'EXPLOITING'
+                        explorerRandomness: Math.round(explorer.epsilon * 100),
+                        collectorRandomness: Math.round(collector.epsilon * 100),
+                        explorerLearningPhase: explorer.epsilon > 0.5 ? 'EXPLORING' : explorer.epsilon > 0.2 ? 'LEARNING' : 'SMART',
+                        collectorLearningPhase: collector.epsilon > 0.5 ? 'EXPLORING' : collector.epsilon > 0.2 ? 'LEARNING' : 'SMART'
                     }
                 };
 
@@ -1392,21 +1662,22 @@
 
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `maze-ai-learning-${new Date().toISOString().split('T')[0]}.json`;
+                link.download = `maze-multi-agent-${new Date().toISOString().split('T')[0]}.json`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
 
-                console.log('Learning data downloaded:', learningData);
+                console.log('Multi-agent learning data downloaded:', learningData);
+                const modeStr = stats.splitMode ? `MULTI-AGENT (${stats.activeAgent})` : 'SINGLE-AGENT';
                 alert(`Downloaded AI learning data!\n\n` +
+                      `🧠 Mode: ${modeStr}\n` +
                       `📊 Stats:\n` +
-                      `- ${learningData.qTableStats.totalStates} states learned\n` +
-                      `- ${learningData.demonstrationStats.count} demonstrations\n` +
-                      `- ${learningData.aiProgress.episodes} training games\n` +
-                      `- ${learningData.analysis.currentRandomnessPercent}% randomness\n\n` +
-                      `💡 Note: With current decay (${this.agent.epsilonDecay}), ` +
-                      `50 games → ${Math.round(learningData.analysis.expectedEpsilonAfter50Games * 100)}% randomness.`);
+                      `- Total episodes: ${stats.totalEpisodes}\n` +
+                      `- Explorer: ${stats.explorerEpisodes} episodes, ${stats.explorerQTable} states\n` +
+                      `- Collector: ${stats.collectorEpisodes} episodes, ${stats.collectorQTable} states\n` +
+                      `- Complexity: ${this.complexity.score}/100\n\n` +
+                      `💡 Split mode ${stats.splitMode ? 'ACTIVE' : 'inactive'} (threshold: 40)`);
             }
         }
 
