@@ -619,10 +619,12 @@
             }
         }
 
-        // ExplorerAgent: Specialized for FAST navigation (ignores gems, finds shortest path)
+        // ExplorerAgent: Specialized for FAST navigation to goal
+        // Uses SAME 11-feature state as Collector (enables knowledge transfer!)
+        // Differentiation happens via REWARDS, not state representation
         class ExplorerAgent extends DQNAgent {
             constructor() {
-                super(8, 4); // Navigation-focused state: 8 features (NO gem info!), 4 actions
+                super(11, 4); // SAME 11-feature state as Collector (knowledge transfer compatible!)
                 this.agentType = 'EXPLORER';
                 this.epsilonDecay = 0.95; // Fast learning for pure navigation
                 this.gamma = 0.98; // Higher discount - long-term path planning important
@@ -754,7 +756,7 @@
                 return this.activeAgent.agentType;
             }
 
-            // Switch agent based on learning progress
+            // Switch agent based on learning progress + TRANSFER KNOWLEDGE
             switchAgent() {
                 if (!this.splitMode) return; // Don't switch in single-agent mode
 
@@ -763,8 +765,18 @@
 
                 // Switch from explorer to collector once maze is mapped
                 if (this.activeAgent === this.explorer && explorerLearned) {
+                    // 🔥 KNOWLEDGE TRANSFER: Copy Explorer's Q-table to Collector!
+                    // Both use same 11-feature state, so Q-tables are compatible
+                    if (this.collector.episodes === 0) {
+                        // First-time transfer: Collector inherits ALL Explorer's navigation knowledge
+                        this.collector.qTable = JSON.parse(JSON.stringify(this.explorer.qTable));
+                        this.collector.epsilon = this.explorer.epsilon; // Inherit exploration level too
+                        console.log(`📚 Knowledge Transfer: Copied ${Object.keys(this.explorer.qTable).length} navigation patterns to Collector!`);
+                        console.log(`   Explorer epsilon: ${Math.round(this.explorer.epsilon * 100)}% → Collector starts at same level`);
+                    }
+
                     this.activeAgent = this.collector;
-                    console.log('🔄 Switching to COLLECTOR (maze mapped)');
+                    console.log('🔄 Switching to COLLECTOR (navigation learned, now optimize gems)');
                     return 'COLLECTOR';
                 }
 
@@ -1073,39 +1085,6 @@
                 return state;
             }
 
-            getExplorerState(maze, lastAction = -1) {
-                // EXPLORER STATE: Pure navigation - learns FASTEST path to goal (ignores gems!)
-                // 8 features → very small Q-table → FAST learning
-                const goalX = maze.size - 2;
-                const goalY = maze.size - 2;
-
-                const directionX = this.x < goalX ? 1 : (this.x > goalX ? -1 : 0);
-                const directionY = this.y < goalY ? 1 : (this.y > goalY ? -1 : 0);
-
-                // Calculate manhattan distance for progress tracking
-                const distance = Math.abs(this.x - goalX) + Math.abs(this.y - goalY);
-                const distanceCategory = Math.min(Math.floor(distance / 5), 3); // 0=very close, 1=close, 2=medium, 3=far
-
-                const state = [
-                    // Direction to goal (navigational compass)
-                    directionX,
-                    directionY,
-
-                    // Local walls only (no gem info!)
-                    maze.isWall(this.x, this.y - 1) ? 1 : 0,
-                    maze.isWall(this.x, this.y + 1) ? 1 : 0,
-                    maze.isWall(this.x - 1, this.y) ? 1 : 0,
-                    maze.isWall(this.x + 1, this.y) ? 1 : 0,
-
-                    // Distance progress (encourages getting closer)
-                    distanceCategory,
-
-                    // Last action taken (helps avoid immediate backtracking)
-                    lastAction === -1 ? 4 : lastAction  // 0-3 = directions, 4 = start/unknown
-                ];
-                return state;
-            }
-
             draw() {
                 const px = this.x * config.cellSize;
                 const py = this.y * config.cellSize;
@@ -1143,9 +1122,6 @@
                 this.aiMoveInterval = 200; // AI moves every 200ms
                 this.normalAISpeed = 200;
                 this.fastAISpeed = 50; // Much faster when player finished
-
-                // AI action tracking (for Explorer state)
-                this.lastAIAction = -1; // Track last action taken by AI
 
                 // Stuck detection
                 this.aiPositionHistory = [];
@@ -1211,9 +1187,6 @@
 
                 // Clear current demonstration when starting new level
                 this.coordinator.getActiveAgent().currentDemonstration = [];
-
-                // Reset AI action tracking
-                this.lastAIAction = -1;
 
                 // Reset stuck detection
                 this.aiPositionHistory = [];
@@ -1376,32 +1349,25 @@
             updateAI() {
                 if (this.ai.reachedGoal) return;
 
-                // Get active agent and use appropriate state representation
+                // Get active agent - both agents now use SAME state representation!
                 const activeAgent = this.coordinator.getActiveAgent();
-                const isExplorer = activeAgent.agentType === 'EXPLORER';
 
-                // Get state (Explorer needs last action for backtrack avoidance)
-                const state = isExplorer ?
-                    this.ai.getExplorerState(this.maze, this.lastAIAction) :
-                    this.ai.getState(this.maze);
-
+                // SHARED STATE: Both Explorer and Collector use same 11-feature state
+                // Differentiation happens via REWARDS in move(), not state representation
+                const state = this.ai.getState(this.maze);
                 const action = activeAgent.act(state);
 
                 const moves = [[0, -1], [0, 1], [-1, 0], [1, 0]]; // Up, Down, Left, Right
                 const [dx, dy] = moves[action];
 
                 // Pass agent type to move() for agent-specific rewards
+                // Explorer: +100 goal, 0 gems → learns fast navigation
+                // Collector: +50 gems, +10 goal → learns optimal collection
                 const reward = this.ai.move(dx, dy, this.maze, activeAgent.agentType);
 
-                // Get next state (again, Explorer needs action tracking)
-                const nextState = isExplorer ?
-                    this.ai.getExplorerState(this.maze, action) :
-                    this.ai.getState(this.maze);
-
+                // Get next state (same representation for both agents)
+                const nextState = this.ai.getState(this.maze);
                 const done = this.ai.reachedGoal;
-
-                // Update last action for next state computation
-                this.lastAIAction = action;
 
                 activeAgent.remember(state, action, reward, nextState, done);
 
@@ -1477,10 +1443,7 @@
                 // Give AI negative feedback about being stuck
                 if (this.aiPositionHistory.length >= 2) {
                     const activeAgent = this.coordinator.getActiveAgent();
-                    const isExplorer = activeAgent.agentType === 'EXPLORER';
-                    const state = isExplorer ?
-                        this.ai.getExplorerState(this.maze, this.lastAIAction) :
-                        this.ai.getState(this.maze);
+                    const state = this.ai.getState(this.maze); // Both agents use same state
 
                     // Mark this pattern as bad
                     activeAgent.remember(state, -1, -50, state, false); // Big negative reward
