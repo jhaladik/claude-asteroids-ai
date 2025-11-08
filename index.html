@@ -260,6 +260,15 @@
                     <span class="tooltiptext">How often AI tries random moves. Starts at 100% (exploring), drops to 1% (using learned strategy).</span>
                 </div>
             </div>
+            <div style="margin-top: 8px; text-align: center;">
+                <button onclick="game.resetAI()" style="background: #f44; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace;">
+                    Reset AI Brain
+                </button>
+                <div class="tooltip" style="display: inline;">
+                    <span class="info-icon">?</span>
+                    <span class="tooltiptext">Clears all saved learning. AI will start from scratch.</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -300,6 +309,9 @@
 
                 // Simple Q-table instead of neural network (easier for browser)
                 this.qTable = {};
+
+                // Load saved progress
+                this.loadProgress();
             }
 
             getStateKey(state) {
@@ -365,6 +377,47 @@
             endEpisode() {
                 this.episodes++;
                 this.replay(32);
+                this.saveProgress();
+            }
+
+            saveProgress() {
+                const progress = {
+                    qTable: this.qTable,
+                    epsilon: this.epsilon,
+                    episodes: this.episodes
+                };
+                try {
+                    localStorage.setItem('mazeRunnerAI', JSON.stringify(progress));
+                } catch (e) {
+                    console.warn('Failed to save AI progress:', e);
+                }
+            }
+
+            loadProgress() {
+                try {
+                    const saved = localStorage.getItem('mazeRunnerAI');
+                    if (saved) {
+                        const progress = JSON.parse(saved);
+                        this.qTable = progress.qTable || {};
+                        this.epsilon = progress.epsilon || 1.0;
+                        this.episodes = progress.episodes || 0;
+                        console.log(`Loaded AI progress: ${this.episodes} episodes, ${Math.round(this.epsilon * 100)}% randomness`);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load AI progress:', e);
+                }
+            }
+
+            resetProgress() {
+                this.qTable = {};
+                this.epsilon = 1.0;
+                this.episodes = 0;
+                this.memory = [];
+                try {
+                    localStorage.removeItem('mazeRunnerAI');
+                } catch (e) {
+                    console.warn('Failed to clear AI progress:', e);
+                }
             }
         }
 
@@ -602,6 +655,33 @@
                 document.getElementById('playerScore').textContent = this.player.score;
                 document.getElementById('aiScore').textContent = this.ai.score;
                 document.getElementById('level').textContent = this.level;
+
+                // Update AI stats display
+                this.updateAIDisplay();
+            }
+
+            updateAIDisplay() {
+                document.getElementById('episodes').textContent = this.agent.episodes;
+
+                const epsilonPercent = Math.round(this.agent.epsilon * 100);
+                document.getElementById('epsilon').textContent = epsilonPercent;
+
+                const modeElement = document.getElementById('aiMode');
+                if (this.agent.epsilon > 0.5) {
+                    modeElement.textContent = 'EXPLORING';
+                    modeElement.className = 'ai-mode exploring';
+                } else if (this.agent.epsilon > 0.2) {
+                    modeElement.textContent = 'LEARNING';
+                    modeElement.className = 'ai-mode';
+                    modeElement.style.background = '#c4f';
+                    modeElement.style.color = '#fff';
+                } else {
+                    modeElement.textContent = 'SMART';
+                    modeElement.className = 'ai-mode exploiting';
+                }
+
+                const progress = Math.min(100, (this.agent.episodes / 50) * 100);
+                document.getElementById('aiProgress').style.width = progress + '%';
             }
 
             setupControls() {
@@ -663,30 +743,7 @@
                 }
 
                 document.getElementById('aiScore').textContent = this.ai.score;
-                document.getElementById('episodes').textContent = this.agent.episodes;
-
-                // Update epsilon as percentage
-                const epsilonPercent = Math.round(this.agent.epsilon * 100);
-                document.getElementById('epsilon').textContent = epsilonPercent;
-
-                // Update AI mode indicator
-                const modeElement = document.getElementById('aiMode');
-                if (this.agent.epsilon > 0.5) {
-                    modeElement.textContent = 'EXPLORING';
-                    modeElement.className = 'ai-mode exploring';
-                } else if (this.agent.epsilon > 0.2) {
-                    modeElement.textContent = 'LEARNING';
-                    modeElement.className = 'ai-mode';
-                    modeElement.style.background = '#c4f';
-                    modeElement.style.color = '#fff';
-                } else {
-                    modeElement.textContent = 'SMART';
-                    modeElement.className = 'ai-mode exploiting';
-                }
-
-                const progress = Math.min(100, (this.agent.episodes / 50) * 100);
-                document.getElementById('aiProgress').style.width = progress + '%';
-
+                this.updateAIDisplay();
                 this.checkGameOver();
             }
 
@@ -756,6 +813,14 @@
                 this.agent = new DQNAgent(10, 4); // Reset AI
                 document.getElementById('modal').style.display = 'none';
                 this.init();
+            }
+
+            resetAI() {
+                if (confirm('Reset AI brain? This will erase all learned knowledge and start training from scratch.')) {
+                    this.agent.resetProgress();
+                    this.updateAIDisplay();
+                    alert('AI brain reset! The AI will start learning from zero.');
+                }
             }
         }
 
