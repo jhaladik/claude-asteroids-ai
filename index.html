@@ -750,12 +750,12 @@
 
                     if (maze.collectGem(newX, newY)) {
                         this.score += 10;
-                        return 10; // Reward
+                        return 50; // HIGH reward for gems (was 10) - prioritize collection!
                     }
 
                     if (maze.isGoal(newX, newY)) {
                         this.reachedGoal = true;
-                        return 100; // Big reward
+                        return 10; // LOW reward for goal (was 100) - speed doesn't matter
                     }
 
                     return -1; // Small penalty for moving
@@ -764,17 +764,30 @@
             }
 
             getState(maze) {
-                // Simple state: nearby walls and goal direction
+                // IMPROVED: Relative state that transfers across different mazes!
+                // Goal is always at (maze.size - 2, maze.size - 2)
+                const goalX = maze.size - 2;
+                const goalY = maze.size - 2;
+
                 const state = [
-                    this.x, this.y,
-                    maze.isWall(this.x, this.y - 1) ? 1 : 0, // Up
-                    maze.isWall(this.x, this.y + 1) ? 1 : 0, // Down
-                    maze.isWall(this.x - 1, this.y) ? 1 : 0, // Left
-                    maze.isWall(this.x + 1, this.y) ? 1 : 0, // Right
-                    maze.isGem(this.x, this.y - 1) ? 1 : 0,
-                    maze.isGem(this.x, this.y + 1) ? 1 : 0,
-                    maze.isGem(this.x - 1, this.y) ? 1 : 0,
-                    maze.isGem(this.x + 1, this.y) ? 1 : 0
+                    // Relative distance to goal (transferable!)
+                    goalX - this.x,  // How far right to goal
+                    goalY - this.y,  // How far down to goal
+
+                    // Local walls (transferable pattern!)
+                    maze.isWall(this.x, this.y - 1) ? 1 : 0, // Wall up?
+                    maze.isWall(this.x, this.y + 1) ? 1 : 0, // Wall down?
+                    maze.isWall(this.x - 1, this.y) ? 1 : 0, // Wall left?
+                    maze.isWall(this.x + 1, this.y) ? 1 : 0, // Wall right?
+
+                    // Local gems (transferable pattern!)
+                    maze.isGem(this.x, this.y - 1) ? 1 : 0, // Gem up?
+                    maze.isGem(this.x, this.y + 1) ? 1 : 0, // Gem down?
+                    maze.isGem(this.x - 1, this.y) ? 1 : 0, // Gem left?
+                    maze.isGem(this.x + 1, this.y) ? 1 : 0, // Gem right?
+
+                    // Gem collection progress
+                    Math.min(Math.floor(this.score / 10), 9)  // Gems collected (capped at 9)
                 ];
                 return state;
             }
@@ -808,7 +821,7 @@
                 this.maze = null;
                 this.player = null;
                 this.ai = null;
-                this.agent = new DQNAgent(10, 4); // 10 state features, 4 actions
+                this.agent = new DQNAgent(11, 4); // 11 state features (relative + local), 4 actions
                 this.level = 1;
                 this.gameOver = false;
                 this.keys = {};
@@ -1219,7 +1232,7 @@
 
             restart() {
                 this.level = 1;
-                this.agent = new DQNAgent(10, 4); // Reset AI
+                this.agent = new DQNAgent(11, 4); // Reset AI with new state representation
                 document.getElementById('modal').style.display = 'none';
                 this.init();
             }
