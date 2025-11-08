@@ -795,6 +795,14 @@
                 this.keys = {};
                 this.lastMoveTime = 0;
                 this.aiMoveInterval = 200; // AI moves every 200ms
+                this.normalAISpeed = 200;
+                this.fastAISpeed = 50; // Much faster when player finished
+
+                // Stuck detection
+                this.aiPositionHistory = [];
+                this.maxHistoryLength = 10;
+                this.stuckThreshold = 6; // If 6 of last 10 moves alternate between 2 positions = stuck
+                this.isStuck = false;
 
                 this.init();
                 this.setupControls();
@@ -809,6 +817,12 @@
 
                 // Clear current demonstration when starting new level
                 this.agent.currentDemonstration = [];
+
+                // Reset stuck detection
+                this.aiPositionHistory = [];
+                this.isStuck = false;
+                this.aiMoveInterval = this.normalAISpeed;
+                this.hideSkipButton();
 
                 document.getElementById('playerScore').textContent = this.player.score;
                 document.getElementById('aiScore').textContent = this.ai.score;
@@ -895,6 +909,9 @@
                     if (this.player.reachedGoal) {
                         this.agent.completeDemonstration(true);
                         this.showLearningMessage();
+
+                        // Speed up AI so player doesn't have to wait
+                        this.aiMoveInterval = this.fastAISpeed;
                     }
 
                     this.keys = {}; // Clear keys after move
@@ -946,12 +963,116 @@
 
                 this.agent.remember(state, action, reward, nextState, done);
 
+                // Track AI position for stuck detection
+                this.aiPositionHistory.push({ x: this.ai.x, y: this.ai.y });
+                if (this.aiPositionHistory.length > this.maxHistoryLength) {
+                    this.aiPositionHistory.shift();
+                }
+
+                // Check if AI is stuck (oscillating between two positions)
+                this.checkIfStuck();
+
                 if (done) {
                     this.agent.endEpisode();
                 }
 
                 document.getElementById('aiScore').textContent = this.ai.score;
                 this.updateAIDisplay();
+                this.checkGameOver();
+            }
+
+            checkIfStuck() {
+                if (this.aiPositionHistory.length < this.maxHistoryLength) return;
+
+                // Count unique positions in recent history
+                const positionCounts = {};
+                for (const pos of this.aiPositionHistory) {
+                    const key = `${pos.x},${pos.y}`;
+                    positionCounts[key] = (positionCounts[key] || 0) + 1;
+                }
+
+                const uniquePositions = Object.keys(positionCounts).length;
+
+                // If AI is only moving between 2 positions and one appears 6+ times = stuck
+                if (uniquePositions <= 2) {
+                    const maxCount = Math.max(...Object.values(positionCounts));
+                    if (maxCount >= this.stuckThreshold) {
+                        if (!this.isStuck) {
+                            this.isStuck = true;
+                            this.onAIStuck();
+                        }
+                    }
+                }
+            }
+
+            onAIStuck() {
+                console.log('AI is stuck! Oscillating between positions.');
+
+                // Give AI negative feedback about being stuck
+                if (this.aiPositionHistory.length >= 2) {
+                    const lastPos = this.aiPositionHistory[this.aiPositionHistory.length - 1];
+                    const state = this.ai.getState(this.maze);
+
+                    // Mark this pattern as bad
+                    this.agent.remember(state, -1, -50, state, false); // Big negative reward
+                }
+
+                // Show skip button
+                this.showSkipButton();
+            }
+
+            showSkipButton() {
+                let skipBtn = document.getElementById('skipAIBtn');
+                if (!skipBtn) {
+                    skipBtn = document.createElement('button');
+                    skipBtn.id = 'skipAIBtn';
+                    skipBtn.textContent = 'AI is Stuck! Skip to Next Level';
+                    skipBtn.style.cssText = `
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: #ff4444;
+                        color: #fff;
+                        border: 3px solid #ff6666;
+                        padding: 20px 30px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        border-radius: 10px;
+                        cursor: pointer;
+                        z-index: 500;
+                        font-family: 'Courier New', monospace;
+                        animation: pulse 1s infinite;
+                    `;
+                    skipBtn.onclick = () => this.skipAI();
+                    document.body.appendChild(skipBtn);
+
+                    // Add pulse animation
+                    if (!document.getElementById('pulseStyle')) {
+                        const style = document.createElement('style');
+                        style.id = 'pulseStyle';
+                        style.textContent = '@keyframes pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.05); } }';
+                        document.head.appendChild(style);
+                    }
+                }
+                skipBtn.style.display = 'block';
+            }
+
+            hideSkipButton() {
+                const skipBtn = document.getElementById('skipAIBtn');
+                if (skipBtn) {
+                    skipBtn.style.display = 'none';
+                }
+            }
+
+            skipAI() {
+                // Mark AI as "failed" this level
+                this.ai.reachedGoal = true; // Fake completion to trigger next level
+
+                // Don't give AI any episode credit for being stuck
+                console.log('Skipping stuck AI - no learning credit given');
+
+                this.hideSkipButton();
                 this.checkGameOver();
             }
 
