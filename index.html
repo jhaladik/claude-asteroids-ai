@@ -32,13 +32,15 @@
         #ui {
             position: absolute;
             top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.8);
-            padding: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            padding: 10px 15px;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
             z-index: 10;
-            min-width: 200px;
+            min-width: 280px;
+            max-width: 90%;
         }
 
         #ui div {
@@ -150,23 +152,114 @@
             background: linear-gradient(90deg, #f0f, #0ff);
             transition: width 0.3s;
         }
+
+        .ai-mode {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .exploring {
+            background: #f0f;
+            color: #fff;
+        }
+
+        .exploiting {
+            background: #0ff;
+            color: #000;
+        }
+
+        .info-icon {
+            cursor: help;
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            background: #666;
+            color: #fff;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 14px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        @media (max-width: 600px) {
+            #ui {
+                font-size: 11px;
+                padding: 8px 10px;
+                min-width: 250px;
+            }
+            .ai-learning {
+                font-size: 10px;
+            }
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
 
     <div id="ui">
-        <div style="font-size: 16px; margin-bottom: 10px; color: #ff0;">🏆 MAZE RUNNER</div>
-        <div class="player-stat">👤 YOU: <span id="playerScore">0</span> gems</div>
-        <div class="ai-stat">🤖 AI: <span id="aiScore">0</span> gems</div>
-        <div style="margin-top: 10px;">Level: <span id="level">1</span></div>
-        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
-            <div class="ai-learning">AI Training Progress:</div>
+        <div style="font-size: 15px; margin-bottom: 8px; color: #ff0; text-align: center;">🏆 MAZE RUNNER</div>
+        <div style="display: flex; justify-content: space-between;">
+            <div class="player-stat">👤 YOU: <span id="playerScore">0</span></div>
+            <div class="ai-stat">🤖 AI: <span id="aiScore">0</span></div>
+        </div>
+        <div style="margin-top: 8px; text-align: center;">Level: <span id="level">1</span></div>
+
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">
+            <div class="ai-learning" style="margin-bottom: 5px;">
+                🧠 AI Learning
+                <span id="aiMode" class="ai-mode exploring">EXPLORING</span>
+            </div>
             <div class="progress-bar">
                 <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
             </div>
-            <div class="ai-learning">Episodes: <span id="episodes">0</span></div>
-            <div class="ai-learning">Epsilon: <span id="epsilon">1.00</span></div>
+            <div class="ai-learning">
+                Rounds: <span id="episodes">0</span>/50
+                <div class="tooltip">
+                    <span class="info-icon">?</span>
+                    <span class="tooltiptext">AI learns by playing 50 practice rounds. More rounds = smarter AI!</span>
+                </div>
+            </div>
+            <div class="ai-learning">
+                Randomness: <span id="epsilon">100</span>%
+                <div class="tooltip">
+                    <span class="info-icon">?</span>
+                    <span class="tooltiptext">How often AI tries random moves. Starts at 100% (exploring), drops to 1% (using learned strategy).</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -286,10 +379,17 @@
         const ctx = canvas.getContext('2d');
 
         function resizeCanvas() {
-            const size = Math.min(window.innerWidth - 20, window.innerHeight - 300);
+            // Account for UI (120px) and controls (220px) plus margins
+            const availableHeight = window.innerHeight - 370;
+            const availableWidth = window.innerWidth - 20;
+            const size = Math.min(availableWidth, availableHeight, 500); // Max 500px
+
             config.cellSize = Math.floor(size / config.gridSize);
             canvas.width = config.gridSize * config.cellSize;
             canvas.height = config.gridSize * config.cellSize;
+
+            // Center canvas vertically in available space
+            canvas.style.marginTop = '130px';
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -564,7 +664,25 @@
 
                 document.getElementById('aiScore').textContent = this.ai.score;
                 document.getElementById('episodes').textContent = this.agent.episodes;
-                document.getElementById('epsilon').textContent = this.agent.epsilon.toFixed(2);
+
+                // Update epsilon as percentage
+                const epsilonPercent = Math.round(this.agent.epsilon * 100);
+                document.getElementById('epsilon').textContent = epsilonPercent;
+
+                // Update AI mode indicator
+                const modeElement = document.getElementById('aiMode');
+                if (this.agent.epsilon > 0.5) {
+                    modeElement.textContent = 'EXPLORING';
+                    modeElement.className = 'ai-mode exploring';
+                } else if (this.agent.epsilon > 0.2) {
+                    modeElement.textContent = 'LEARNING';
+                    modeElement.className = 'ai-mode';
+                    modeElement.style.background = '#c4f';
+                    modeElement.style.color = '#fff';
+                } else {
+                    modeElement.textContent = 'SMART';
+                    modeElement.className = 'ai-mode exploiting';
+                }
 
                 const progress = Math.min(100, (this.agent.episodes / 50) * 100);
                 document.getElementById('aiProgress').style.width = progress + '%';
