@@ -619,12 +619,13 @@
             }
         }
 
-        // ExplorerAgent: Specialized for fast maze mapping (ignores gems)
+        // ExplorerAgent: Specialized for FAST navigation (ignores gems, finds shortest path)
         class ExplorerAgent extends DQNAgent {
             constructor() {
-                super(7, 4); // Simplified state: 7 features (no gem info), 4 actions
+                super(8, 4); // Navigation-focused state: 8 features (NO gem info!), 4 actions
                 this.agentType = 'EXPLORER';
-                this.epsilonDecay = 0.96; // Slightly faster learning for exploration
+                this.epsilonDecay = 0.95; // Fast learning for pure navigation
+                this.gamma = 0.98; // Higher discount - long-term path planning important
             }
 
             saveProgress() {
@@ -993,27 +994,50 @@
                 this.reachedGoal = false;
             }
 
-            move(dx, dy, maze) {
+            move(dx, dy, maze, agentType = 'COLLECTOR') {
                 const newX = this.x + dx;
                 const newY = this.y + dy;
 
                 if (!maze.isWall(newX, newY)) {
+                    // Store old position to calculate progress
+                    const oldDistance = Math.abs(this.x - (maze.size - 2)) + Math.abs(this.y - (maze.size - 2));
+
                     this.x = newX;
                     this.y = newY;
 
-                    if (maze.collectGem(newX, newY)) {
+                    const newDistance = Math.abs(this.x - (maze.size - 2)) + Math.abs(this.y - (maze.size - 2));
+                    const madeProgress = newDistance < oldDistance;
+
+                    // Check for gem collection
+                    const collectedGem = maze.collectGem(newX, newY);
+                    if (collectedGem) {
                         this.score += 10;
-                        return 50; // HIGH reward for gems (was 10) - prioritize collection!
                     }
 
-                    if (maze.isGoal(newX, newY)) {
+                    // Check for goal
+                    const reachedGoal = maze.isGoal(newX, newY);
+                    if (reachedGoal) {
                         this.reachedGoal = true;
-                        return 10; // LOW reward for goal (was 100) - speed doesn't matter
                     }
 
-                    return -1; // Small penalty for moving
+                    // AGENT-SPECIFIC REWARD STRUCTURES
+                    if (agentType === 'EXPLORER') {
+                        // EXPLORER: Optimize for SPEED to goal (ignore gems!)
+                        if (reachedGoal) return 100;           // Main objective: reach goal fast!
+                        if (collectedGem) return 0;            // Gems are irrelevant (don't avoid, don't seek)
+                        if (madeProgress) return 1;            // Small bonus for getting closer
+                        return -1;                             // Penalty for moves (encourages efficiency)
+                    } else {
+                        // COLLECTOR: Optimize for GEM collection + goal
+                        if (collectedGem) return 50;           // Main objective: collect gems!
+                        if (reachedGoal) return 10;            // Secondary: reach goal after gems
+                        if (madeProgress) return 0.5;          // Tiny bonus for progress
+                        return -1;                             // Penalty for moves (encourages efficiency)
+                    }
                 }
-                return -10; // Penalty for hitting wall
+
+                // Hit wall - both agents penalized equally
+                return -10;
             }
 
             getState(maze) {
@@ -1049,17 +1073,21 @@
                 return state;
             }
 
-            getExplorerState(maze) {
-                // SIMPLIFIED state for ExplorerAgent: NO gem info, focus on navigation!
-                // Only 7 features → even smaller Q-table → faster learning
+            getExplorerState(maze, lastAction = -1) {
+                // EXPLORER STATE: Pure navigation - learns FASTEST path to goal (ignores gems!)
+                // 8 features → very small Q-table → FAST learning
                 const goalX = maze.size - 2;
                 const goalY = maze.size - 2;
 
                 const directionX = this.x < goalX ? 1 : (this.x > goalX ? -1 : 0);
                 const directionY = this.y < goalY ? 1 : (this.y > goalY ? -1 : 0);
 
+                // Calculate manhattan distance for progress tracking
+                const distance = Math.abs(this.x - goalX) + Math.abs(this.y - goalY);
+                const distanceCategory = Math.min(Math.floor(distance / 5), 3); // 0=very close, 1=close, 2=medium, 3=far
+
                 const state = [
-                    // Direction to goal
+                    // Direction to goal (navigational compass)
                     directionX,
                     directionY,
 
@@ -1069,8 +1097,11 @@
                     maze.isWall(this.x - 1, this.y) ? 1 : 0,
                     maze.isWall(this.x + 1, this.y) ? 1 : 0,
 
-                    // Distance category (close, medium, far)
-                    Math.min(Math.floor((Math.abs(this.x - goalX) + Math.abs(this.y - goalY)) / 5), 2)
+                    // Distance progress (encourages getting closer)
+                    distanceCategory,
+
+                    // Last action taken (helps avoid immediate backtracking)
+                    lastAction === -1 ? 4 : lastAction  // 0-3 = directions, 4 = start/unknown
                 ];
                 return state;
             }
@@ -1112,6 +1143,9 @@
                 this.aiMoveInterval = 200; // AI moves every 200ms
                 this.normalAISpeed = 200;
                 this.fastAISpeed = 50; // Much faster when player finished
+
+                // AI action tracking (for Explorer state)
+                this.lastAIAction = -1; // Track last action taken by AI
 
                 // Stuck detection
                 this.aiPositionHistory = [];
@@ -1177,6 +1211,9 @@
 
                 // Clear current demonstration when starting new level
                 this.coordinator.getActiveAgent().currentDemonstration = [];
+
+                // Reset AI action tracking
+                this.lastAIAction = -1;
 
                 // Reset stuck detection
                 this.aiPositionHistory = [];
@@ -1343,16 +1380,28 @@
                 const activeAgent = this.coordinator.getActiveAgent();
                 const isExplorer = activeAgent.agentType === 'EXPLORER';
 
-                // Use simplified state for Explorer, full state for Collector
-                const state = isExplorer ? this.ai.getExplorerState(this.maze) : this.ai.getState(this.maze);
+                // Get state (Explorer needs last action for backtrack avoidance)
+                const state = isExplorer ?
+                    this.ai.getExplorerState(this.maze, this.lastAIAction) :
+                    this.ai.getState(this.maze);
+
                 const action = activeAgent.act(state);
 
                 const moves = [[0, -1], [0, 1], [-1, 0], [1, 0]]; // Up, Down, Left, Right
                 const [dx, dy] = moves[action];
 
-                const reward = this.ai.move(dx, dy, this.maze);
-                const nextState = isExplorer ? this.ai.getExplorerState(this.maze) : this.ai.getState(this.maze);
+                // Pass agent type to move() for agent-specific rewards
+                const reward = this.ai.move(dx, dy, this.maze, activeAgent.agentType);
+
+                // Get next state (again, Explorer needs action tracking)
+                const nextState = isExplorer ?
+                    this.ai.getExplorerState(this.maze, action) :
+                    this.ai.getState(this.maze);
+
                 const done = this.ai.reachedGoal;
+
+                // Update last action for next state computation
+                this.lastAIAction = action;
 
                 activeAgent.remember(state, action, reward, nextState, done);
 
@@ -1429,7 +1478,9 @@
                 if (this.aiPositionHistory.length >= 2) {
                     const activeAgent = this.coordinator.getActiveAgent();
                     const isExplorer = activeAgent.agentType === 'EXPLORER';
-                    const state = isExplorer ? this.ai.getExplorerState(this.maze) : this.ai.getState(this.maze);
+                    const state = isExplorer ?
+                        this.ai.getExplorerState(this.maze, this.lastAIAction) :
+                        this.ai.getState(this.maze);
 
                     // Mark this pattern as bad
                     activeAgent.remember(state, -1, -50, state, false); // Big negative reward
