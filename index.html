@@ -259,13 +259,17 @@
                 this.target = null;
                 this.fireTimer = 0;
                 this.thinkTimer = 0;
+                this.actionDelay = 180; // 3 second startup delay
+                this.rotationSpeed = 0.6; // Slower rotation (60% of player)
+                this.aimError = 0.15; // Aiming inaccuracy in radians
+                this.reactionTime = 10; // Frames before reacting
             }
 
             think(asteroids) {
-                // Re-evaluate target every 30 frames
+                // Re-evaluate target every 45 frames (less frequent)
                 if (this.thinkTimer <= 0) {
                     this.findTarget(asteroids);
-                    this.thinkTimer = 30;
+                    this.thinkTimer = 45;
                 }
                 this.thinkTimer--;
             }
@@ -276,54 +280,78 @@
                     return;
                 }
 
-                // Find nearest asteroid
-                let nearest = null;
-                let minDist = Infinity;
+                // Mix of strategies - sometimes nearest, sometimes largest
+                let target = null;
 
-                for (let asteroid of asteroids) {
-                    const dx = asteroid.x - this.x;
-                    const dy = asteroid.y - this.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                if (Math.random() > 0.3) {
+                    // 70% of time: Find nearest asteroid
+                    let minDist = Infinity;
+                    for (let asteroid of asteroids) {
+                        const dx = asteroid.x - this.x;
+                        const dy = asteroid.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist < minDist) {
-                        minDist = dist;
-                        nearest = asteroid;
+                        if (dist < minDist) {
+                            minDist = dist;
+                            target = asteroid;
+                        }
+                    }
+                } else {
+                    // 30% of time: Find largest asteroid
+                    let maxSize = 0;
+                    for (let asteroid of asteroids) {
+                        if (asteroid.size > maxSize) {
+                            maxSize = asteroid.size;
+                            target = asteroid;
+                        }
                     }
                 }
 
-                this.target = nearest;
+                this.target = target;
             }
 
             updateAI(asteroids) {
+                // Startup delay
+                if (this.actionDelay > 0) {
+                    this.actionDelay--;
+                    return null;
+                }
+
                 this.think(asteroids);
 
                 if (!this.target) return null;
 
-                // Calculate angle to target
+                // Calculate angle to target with aiming error
                 const dx = this.target.x - this.x;
                 const dy = this.target.y - this.y;
-                const targetAngle = Math.atan2(dy, dx);
+                const distance = Math.sqrt(dx * dx + dy * dy);
 
-                // Rotate towards target
+                // Add some error based on distance
+                const errorAmount = this.aimError * (distance / 300);
+                const targetAngle = Math.atan2(dy, dx) + (Math.random() - 0.5) * errorAmount;
+
+                // Rotate towards target (slower than player)
                 let angleDiff = targetAngle - this.angle;
                 // Normalize angle difference to -PI to PI
                 while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
                 while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
 
-                if (Math.abs(angleDiff) > 0.1) {
-                    this.rotate(angleDiff > 0 ? 1 : -1);
+                if (Math.abs(angleDiff) > 0.15) {
+                    // Rotate slower than player
+                    const rotateDir = angleDiff > 0 ? 1 : -1;
+                    this.angle += rotateDir * config.shipRotationSpeed * this.rotationSpeed * Math.PI / 180;
                 }
 
-                // Thrust towards target if far away
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance > 200) {
+                // Thrust occasionally, not constantly
+                if (distance > 250 && Math.random() > 0.5) {
                     this.thrust();
                 }
 
-                // Fire when aligned with target
+                // Fire when reasonably aligned (not perfectly)
                 this.fireTimer--;
-                if (Math.abs(angleDiff) < 0.3 && this.fireTimer <= 0) {
-                    this.fireTimer = 20; // Fire every 20 frames when aligned
+                const aimThreshold = 0.4; // Less accurate aiming
+                if (Math.abs(angleDiff) < aimThreshold && this.fireTimer <= 0 && distance < 400) {
+                    this.fireTimer = 50 + Math.random() * 30; // Variable fire rate (50-80 frames)
                     return this.createBullet();
                 }
 
@@ -738,8 +766,19 @@
                 this.ship.draw();
                 this.aiShip.draw();
 
-                // Draw AI target indicator
-                if (this.aiShip.target) {
+                // Draw AI status indicators
+                if (this.aiShip.actionDelay > 0) {
+                    // AI warming up indicator
+                    ctx.fillStyle = 'rgba(0, 255, 255, 0.7)';
+                    ctx.font = '14px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('AI STARTING...', this.aiShip.x, this.aiShip.y - 30);
+
+                    // Countdown timer
+                    const secondsLeft = Math.ceil(this.aiShip.actionDelay / 60);
+                    ctx.fillText(secondsLeft + 's', this.aiShip.x, this.aiShip.y - 15);
+                } else if (this.aiShip.target) {
+                    // AI target indicator (only when active)
                     ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
                     ctx.lineWidth = 1;
                     ctx.setLineDash([5, 5]);
@@ -749,6 +788,9 @@
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
+
+                // Reset text alignment
+                ctx.textAlign = 'left';
             }
 
             gameLoop() {
