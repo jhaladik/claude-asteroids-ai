@@ -41,6 +41,35 @@
             z-index: 10;
             min-width: 280px;
             max-width: 90%;
+            transition: all 0.3s ease;
+        }
+
+        #ui.minimized {
+            padding: 8px 15px;
+        }
+
+        #ui.minimized #uiContent {
+            display: none;
+        }
+
+        .minimize-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .minimize-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         #ui div {
@@ -231,42 +260,46 @@
     <canvas id="gameCanvas"></canvas>
 
     <div id="ui">
+        <button class="minimize-btn" onclick="toggleUI()" id="minimizeBtn">−</button>
         <div style="font-size: 15px; margin-bottom: 8px; color: #ff0; text-align: center;">🏆 MAZE RUNNER</div>
-        <div style="display: flex; justify-content: space-between;">
-            <div class="player-stat">👤 YOU: <span id="playerScore">0</span></div>
-            <div class="ai-stat">🤖 AI: <span id="aiScore">0</span></div>
-        </div>
-        <div style="margin-top: 8px; text-align: center;">Level: <span id="level">1</span></div>
 
-        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">
-            <div class="ai-learning" style="margin-bottom: 5px;">
-                🧠 AI Learning
-                <span id="aiMode" class="ai-mode exploring">EXPLORING</span>
+        <div id="uiContent">
+            <div style="display: flex; justify-content: space-between;">
+                <div class="player-stat">👤 YOU: <span id="playerScore">0</span></div>
+                <div class="ai-stat">🤖 AI: <span id="aiScore">0</span></div>
             </div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
-            </div>
-            <div class="ai-learning">
-                Rounds: <span id="episodes">0</span>/50
-                <div class="tooltip">
-                    <span class="info-icon">?</span>
-                    <span class="tooltiptext">AI learns by playing 50 practice rounds. More rounds = smarter AI!</span>
+            <div style="margin-top: 8px; text-align: center;">Level: <span id="level">1</span></div>
+
+            <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">
+                <div class="ai-learning" style="margin-bottom: 5px;">
+                    🧠 AI Training
+                    <span id="aiMode" class="ai-mode exploring">EXPLORING</span>
                 </div>
-            </div>
-            <div class="ai-learning">
-                Randomness: <span id="epsilon">100</span>%
-                <div class="tooltip">
-                    <span class="info-icon">?</span>
-                    <span class="tooltiptext">How often AI tries random moves. Starts at 100% (exploring), drops to 1% (using learned strategy).</span>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
                 </div>
-            </div>
-            <div style="margin-top: 8px; text-align: center;">
-                <button onclick="game.resetAI()" style="background: #f44; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace;">
-                    Reset AI Brain
-                </button>
-                <div class="tooltip" style="display: inline;">
-                    <span class="info-icon">?</span>
-                    <span class="tooltiptext">Clears all saved learning. AI will start from scratch.</span>
+                <div class="ai-learning">
+                    Training Games: <span id="episodes">0</span>/50
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Each time the AI reaches the goal flag 🏁, it completes one training game and learns from the experience. This counter shows how many times the AI has reached the goal (NOT how many gems collected).</span>
+                    </div>
+                </div>
+                <div class="ai-learning">
+                    Randomness: <span id="epsilon">100</span>%
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">How often AI tries random moves vs using learned strategy. Starts at 100% (random exploring), drops to 1% (using knowledge).</span>
+                    </div>
+                </div>
+                <div style="margin-top: 8px; text-align: center;">
+                    <button onclick="game.resetAI()" style="background: #f44; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace;">
+                        Reset AI Brain
+                    </button>
+                    <div class="tooltip" style="display: inline;">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Clears all saved learning. AI will start from scratch.</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -293,6 +326,14 @@
     </div>
 
     <script>
+        // UI Toggle Function
+        function toggleUI() {
+            const ui = document.getElementById('ui');
+            const btn = document.getElementById('minimizeBtn');
+            ui.classList.toggle('minimized');
+            btn.textContent = ui.classList.contains('minimized') ? '+' : '−';
+        }
+
         // Simple DQN Implementation
         class DQNAgent {
             constructor(stateSize, actionSize) {
