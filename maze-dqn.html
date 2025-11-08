@@ -279,10 +279,10 @@
                     <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
                 </div>
                 <div class="ai-learning">
-                    👁️ Learning from You: <span id="demonstrations">0</span>
+                    👁️ Learning from You: <span id="demonstrations">0</span>/10
                     <div class="tooltip">
                         <span class="info-icon">?</span>
-                        <span class="tooltiptext">AI watches your successful paths and learns to copy them! Each time you reach the goal, the AI records your moves and uses them to improve. This helps the AI learn faster than pure random exploration.</span>
+                        <span class="tooltiptext">AI watches your successful paths and learns to copy them! Each time you reach the goal, the AI records your moves and uses them to improve. The AI keeps your 10 most recent successful demonstrations. Older demonstrations are replaced as you complete new ones, so the AI always learns from your latest strategies.</span>
                     </div>
                 </div>
                 <div class="ai-learning">
@@ -327,6 +327,14 @@
         <div style="margin: 20px 0;">
             <div>Your Score: <span id="finalPlayerScore">0</span></div>
             <div>AI Score: <span id="finalAiScore">0</span></div>
+        </div>
+        <div style="margin: 20px 0; padding: 15px; background: rgba(0,255,255,0.1); border-radius: 8px; border: 1px solid rgba(0,255,255,0.3);">
+            <div style="font-size: 14px; color: #0ff; margin-bottom: 10px; font-weight: bold;">📊 AI Learning Progress</div>
+            <div style="font-size: 12px; margin: 5px 0;">👁️ Demonstrations Learned: <span id="finalDemonstrations">0</span>/10</div>
+            <div style="font-size: 12px; margin: 5px 0;">🎯 Training Games Completed: <span id="finalEpisodes">0</span>/50</div>
+            <div style="font-size: 12px; margin: 5px 0;">🎲 Randomness Level: <span id="finalEpsilon">100</span>%</div>
+            <div style="font-size: 12px; margin: 5px 0;">🧠 AI Mode: <span id="finalAIMode">EXPLORING</span></div>
+            <div style="font-size: 11px; margin-top: 8px; color: #aaa; font-style: italic;" id="aiProgressMessage">Keep playing to help the AI learn!</div>
         </div>
         <button onclick="game.nextLevel()">Next Level</button>
         <button onclick="game.restart()">Restart</button>
@@ -1132,6 +1140,43 @@
 
                 document.getElementById('finalPlayerScore').textContent = this.player.score;
                 document.getElementById('finalAiScore').textContent = this.ai.score;
+
+                // Update AI learning statistics
+                document.getElementById('finalDemonstrations').textContent = this.agent.demonstrations.length;
+                document.getElementById('finalEpisodes').textContent = this.agent.episodes;
+                document.getElementById('finalEpsilon').textContent = Math.round(this.agent.epsilon * 100);
+
+                // Determine AI mode
+                let aiModeText = 'EXPLORING';
+                if (this.agent.demonstrations.length > 0 && this.agent.imitationWeight > 0.5) {
+                    aiModeText = 'IMITATING';
+                } else if (this.agent.epsilon > 0.5) {
+                    aiModeText = 'EXPLORING';
+                } else if (this.agent.epsilon > 0.2) {
+                    aiModeText = 'LEARNING';
+                } else {
+                    aiModeText = 'SMART';
+                }
+                document.getElementById('finalAIMode').textContent = aiModeText;
+
+                // Generate progress message
+                const progressMsg = document.getElementById('aiProgressMessage');
+                if (this.agent.episodes >= 50) {
+                    progressMsg.textContent = '🎓 AI has completed maximum training games!';
+                    progressMsg.style.color = '#0f0';
+                } else if (this.agent.demonstrations.length === 0) {
+                    progressMsg.textContent = '💡 Teach the AI by showing it how to reach the goal!';
+                    progressMsg.style.color = '#ff0';
+                } else if (this.agent.demonstrations.length < 5) {
+                    progressMsg.textContent = '📚 More demonstrations will help the AI learn faster!';
+                    progressMsg.style.color = '#0ff';
+                } else if (this.agent.epsilon < 0.2) {
+                    progressMsg.textContent = '🌟 AI is getting smart! Keep training for mastery!';
+                    progressMsg.style.color = '#0f0';
+                } else {
+                    progressMsg.textContent = '📈 Good progress! AI is learning from your examples!';
+                    progressMsg.style.color = '#0ff';
+                }
 
                 if (this.player.score > this.ai.score) {
                     title.textContent = '🎉 YOU WIN!';
