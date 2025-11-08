@@ -432,17 +432,17 @@
         const ctx = canvas.getContext('2d');
 
         function resizeCanvas() {
-            // Account for UI (120px) and controls (220px) plus margins
-            const availableHeight = window.innerHeight - 370;
+            // Account for UI (~180px) and controls (220px) plus margins
+            const availableHeight = window.innerHeight - 420;
             const availableWidth = window.innerWidth - 20;
-            const size = Math.min(availableWidth, availableHeight, 500); // Max 500px
+            const size = Math.min(availableWidth, availableHeight, 450); // Max 450px
 
             config.cellSize = Math.floor(size / config.gridSize);
             canvas.width = config.gridSize * config.cellSize;
             canvas.height = config.gridSize * config.cellSize;
 
-            // Center canvas vertically in available space
-            canvas.style.marginTop = '130px';
+            // Add enough top margin to clear the UI
+            canvas.style.marginTop = '200px';
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
