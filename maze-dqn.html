@@ -299,13 +299,23 @@
                         <span class="tooltiptext">How often AI tries random moves vs using learned strategy. Starts at 100% (random exploring), drops to 1% (using knowledge).</span>
                     </div>
                 </div>
+                <div class="ai-learning">
+                    Q-Table Size: <span id="qtableSize">0</span> states
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Number of unique game situations the AI has learned about. More states = more experience!</span>
+                    </div>
+                </div>
                 <div style="margin-top: 8px; text-align: center;">
-                    <button onclick="game.resetAI()" style="background: #f44; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace;">
-                        Reset AI Brain
+                    <button onclick="game.downloadLearningData()" style="background: #0a0; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace; margin: 2px;">
+                        💾 Download Data
+                    </button>
+                    <button onclick="game.resetAI()" style="background: #f44; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace; margin: 2px;">
+                        🔄 Reset AI
                     </button>
                     <div class="tooltip" style="display: inline;">
                         <span class="info-icon">?</span>
-                        <span class="tooltiptext">Clears all saved learning. AI will start from scratch.</span>
+                        <span class="tooltiptext">Download: Save AI learning data as JSON file for analysis. Reset: Clears all saved learning, AI starts from scratch.</span>
                     </div>
                 </div>
             </div>
@@ -334,6 +344,7 @@
             <div style="font-size: 12px; margin: 5px 0;">🎯 Training Games Completed: <span id="finalEpisodes">0</span>/50</div>
             <div style="font-size: 12px; margin: 5px 0;">🎲 Randomness Level: <span id="finalEpsilon">100</span>%</div>
             <div style="font-size: 12px; margin: 5px 0;">🧠 AI Mode: <span id="finalAIMode">EXPLORING</span></div>
+            <div style="font-size: 12px; margin: 5px 0;">📚 States Learned: <span id="finalQTableSize">0</span></div>
             <div style="font-size: 11px; margin-top: 8px; color: #aaa; font-style: italic;" id="aiProgressMessage">Keep playing to help the AI learn!</div>
         </div>
         <button onclick="game.nextLevel()">Next Level</button>
@@ -359,7 +370,7 @@
                 this.gamma = 0.95; // Discount factor
                 this.epsilon = 1.0; // Exploration rate
                 this.epsilonMin = 0.01;
-                this.epsilonDecay = 0.995;
+                this.epsilonDecay = 0.98; // Faster decay: 50 games → 36% randomness (was 0.995 → 78%)
                 this.learningRate = 0.001;
                 this.episodes = 0;
 
@@ -847,6 +858,10 @@
                 const epsilonPercent = Math.round(this.agent.epsilon * 100);
                 document.getElementById('epsilon').textContent = epsilonPercent;
 
+                // Update Q-table size
+                const qtableSize = Object.keys(this.agent.qTable).length;
+                document.getElementById('qtableSize').textContent = qtableSize;
+
                 const modeElement = document.getElementById('aiMode');
 
                 // Show imitation mode if AI is using demonstrations
@@ -1145,6 +1160,7 @@
                 document.getElementById('finalDemonstrations').textContent = this.agent.demonstrations.length;
                 document.getElementById('finalEpisodes').textContent = this.agent.episodes;
                 document.getElementById('finalEpsilon').textContent = Math.round(this.agent.epsilon * 100);
+                document.getElementById('finalQTableSize').textContent = Object.keys(this.agent.qTable).length;
 
                 // Determine AI mode
                 let aiModeText = 'EXPLORING';
@@ -1214,6 +1230,73 @@
                     this.updateAIDisplay();
                     alert('AI brain reset! The AI will start learning from zero.');
                 }
+            }
+
+            downloadLearningData() {
+                // Gather comprehensive learning data
+                const learningData = {
+                    metadata: {
+                        exportDate: new Date().toISOString(),
+                        gameVersion: '1.0',
+                        level: this.level
+                    },
+                    aiProgress: {
+                        episodes: this.agent.episodes,
+                        epsilon: this.agent.epsilon,
+                        imitationWeight: this.agent.imitationWeight,
+                        epsilonDecay: this.agent.epsilonDecay,
+                        epsilonMin: this.agent.epsilonMin
+                    },
+                    qTable: this.agent.qTable,
+                    qTableStats: {
+                        totalStates: Object.keys(this.agent.qTable).length,
+                        totalQValues: Object.keys(this.agent.qTable).length * this.agent.actionSize,
+                        sampleStates: Object.keys(this.agent.qTable).slice(0, 5)
+                    },
+                    demonstrations: this.agent.demonstrations,
+                    demonstrationStats: {
+                        count: this.agent.demonstrations.length,
+                        maxDemonstrations: this.agent.maxDemonstrations,
+                        averagePathLength: this.agent.demonstrations.length > 0
+                            ? this.agent.demonstrations.reduce((sum, demo) => sum + demo.length, 0) / this.agent.demonstrations.length
+                            : 0
+                    },
+                    hyperparameters: {
+                        gamma: this.agent.gamma,
+                        learningRate: this.agent.learningRate,
+                        epsilonDecay: this.agent.epsilonDecay,
+                        epsilonMin: this.agent.epsilonMin,
+                        imitationDecay: this.agent.imitationDecay
+                    },
+                    analysis: {
+                        expectedEpsilonAfter50Games: Math.pow(this.agent.epsilonDecay, 50),
+                        currentRandomnessPercent: Math.round(this.agent.epsilon * 100),
+                        learningPhase: this.agent.epsilon > 0.5 ? 'EXPLORING' : this.agent.epsilon > 0.2 ? 'LEARNING' : 'EXPLOITING'
+                    }
+                };
+
+                // Create downloadable JSON file
+                const dataStr = JSON.stringify(learningData, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `maze-ai-learning-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                console.log('Learning data downloaded:', learningData);
+                alert(`Downloaded AI learning data!\n\n` +
+                      `📊 Stats:\n` +
+                      `- ${learningData.qTableStats.totalStates} states learned\n` +
+                      `- ${learningData.demonstrationStats.count} demonstrations\n` +
+                      `- ${learningData.aiProgress.episodes} training games\n` +
+                      `- ${learningData.analysis.currentRandomnessPercent}% randomness\n\n` +
+                      `💡 Note: With current decay (${this.agent.epsilonDecay}), ` +
+                      `50 games → ${Math.round(learningData.analysis.expectedEpsilonAfter50Games * 100)}% randomness.`);
             }
         }
 
