@@ -600,6 +600,23 @@
                     console.warn('Failed to clear AI progress:', e);
                 }
             }
+
+            getQTableSize() {
+                return Object.keys(this.qTable).length;
+            }
+
+            getAIMode() {
+                // Centralized AI mode determination logic
+                if (this.demonstrations.length > 0 && this.imitationWeight > 0.5) {
+                    return 'IMITATING';
+                } else if (this.epsilon > 0.5) {
+                    return 'EXPLORING';
+                } else if (this.epsilon > 0.2) {
+                    return 'LEARNING';
+                } else {
+                    return 'SMART';
+                }
+            }
         }
 
         // Game Configuration
@@ -885,6 +902,32 @@
                 this.stuckThreshold = 6; // If 6 of last 10 moves alternate between 2 positions = stuck
                 this.isStuck = false;
 
+                // Cache frequently-used DOM elements
+                this.dom = {
+                    playerScore: document.getElementById('playerScore'),
+                    aiScore: document.getElementById('aiScore'),
+                    level: document.getElementById('level'),
+                    episodes: document.getElementById('episodes'),
+                    demonstrations: document.getElementById('demonstrations'),
+                    epsilon: document.getElementById('epsilon'),
+                    qtableSize: document.getElementById('qtableSize'),
+                    complexity: document.getElementById('complexity'),
+                    splitIndicator: document.getElementById('splitIndicator'),
+                    aiMode: document.getElementById('aiMode'),
+                    aiProgress: document.getElementById('aiProgress'),
+                    modal: document.getElementById('modal'),
+                    modalTitle: document.getElementById('modalTitle'),
+                    modalMessage: document.getElementById('modalMessage'),
+                    finalPlayerScore: document.getElementById('finalPlayerScore'),
+                    finalAiScore: document.getElementById('finalAiScore'),
+                    finalDemonstrations: document.getElementById('finalDemonstrations'),
+                    finalEpisodes: document.getElementById('finalEpisodes'),
+                    finalEpsilon: document.getElementById('finalEpsilon'),
+                    finalQTableSize: document.getElementById('finalQTableSize'),
+                    finalAIMode: document.getElementById('finalAIMode'),
+                    aiProgressMessage: document.getElementById('aiProgressMessage')
+                };
+
                 this.init();
                 this.setupControls();
                 this.gameLoop();
@@ -914,62 +957,58 @@
                     console.log('⚠️ High complexity detected! AI should consider splitting into multiple agents.');
                 }
 
-                document.getElementById('playerScore').textContent = this.player.score;
-                document.getElementById('aiScore').textContent = this.ai.score;
-                document.getElementById('level').textContent = this.level;
+                this.dom.playerScore.textContent = this.player.score;
+                this.dom.aiScore.textContent = this.ai.score;
+                this.dom.level.textContent = this.level;
 
                 // Update AI stats display
                 this.updateAIDisplay();
             }
 
             updateAIDisplay() {
-                document.getElementById('episodes').textContent = this.agent.episodes;
-                document.getElementById('demonstrations').textContent = this.agent.demonstrations.length;
+                this.dom.episodes.textContent = this.agent.episodes;
+                this.dom.demonstrations.textContent = this.agent.demonstrations.length;
 
                 const epsilonPercent = Math.round(this.agent.epsilon * 100);
-                document.getElementById('epsilon').textContent = epsilonPercent;
+                this.dom.epsilon.textContent = epsilonPercent;
 
                 // Update Q-table size
-                const qtableSize = Object.keys(this.agent.qTable).length;
-                document.getElementById('qtableSize').textContent = qtableSize;
+                this.dom.qtableSize.textContent = this.agent.getQTableSize();
 
                 // Update complexity display
                 if (this.complexity) {
-                    document.getElementById('complexity').textContent = this.complexity.score;
-                    const splitIndicator = document.getElementById('splitIndicator');
+                    this.dom.complexity.textContent = this.complexity.score;
 
                     if (this.complexity.recommendSplit) {
-                        splitIndicator.innerHTML = '<span style="color: #ff0; font-weight: bold;">⚡ SPLIT!</span>';
-                        splitIndicator.title = `Complexity ${this.complexity.score} > 40. AI should split into Explorer + Collector agents.`;
+                        this.dom.splitIndicator.innerHTML = '<span style="color: #ff0; font-weight: bold;">⚡ SPLIT!</span>';
+                        this.dom.splitIndicator.title = `Complexity ${this.complexity.score} > 40. AI should split into Explorer + Collector agents.`;
                     } else {
-                        splitIndicator.innerHTML = '<span style="color: #0f0;">✓ Simple</span>';
-                        splitIndicator.title = `Complexity ${this.complexity.score} ≤ 40. Single agent is efficient.`;
+                        this.dom.splitIndicator.innerHTML = '<span style="color: #0f0;">✓ Simple</span>';
+                        this.dom.splitIndicator.title = `Complexity ${this.complexity.score} ≤ 40. Single agent is efficient.`;
                     }
                 }
 
-                const modeElement = document.getElementById('aiMode');
+                // Use centralized AI mode determination
+                const aiMode = this.agent.getAIMode();
+                this.dom.aiMode.textContent = aiMode;
 
-                // Show imitation mode if AI is using demonstrations
-                if (this.agent.demonstrations.length > 0 && this.agent.imitationWeight > 0.5) {
-                    modeElement.textContent = 'IMITATING';
-                    modeElement.className = 'ai-mode';
-                    modeElement.style.background = '#0ff';
-                    modeElement.style.color = '#000';
-                } else if (this.agent.epsilon > 0.5) {
-                    modeElement.textContent = 'EXPLORING';
-                    modeElement.className = 'ai-mode exploring';
-                } else if (this.agent.epsilon > 0.2) {
-                    modeElement.textContent = 'LEARNING';
-                    modeElement.className = 'ai-mode';
-                    modeElement.style.background = '#c4f';
-                    modeElement.style.color = '#fff';
+                // Set mode-specific styling
+                if (aiMode === 'IMITATING') {
+                    this.dom.aiMode.className = 'ai-mode';
+                    this.dom.aiMode.style.background = '#0ff';
+                    this.dom.aiMode.style.color = '#000';
+                } else if (aiMode === 'EXPLORING') {
+                    this.dom.aiMode.className = 'ai-mode exploring';
+                } else if (aiMode === 'LEARNING') {
+                    this.dom.aiMode.className = 'ai-mode';
+                    this.dom.aiMode.style.background = '#c4f';
+                    this.dom.aiMode.style.color = '#fff';
                 } else {
-                    modeElement.textContent = 'SMART';
-                    modeElement.className = 'ai-mode exploiting';
+                    this.dom.aiMode.className = 'ai-mode exploiting';
                 }
 
                 const progress = Math.min(100, (this.agent.episodes / 50) * 100);
-                document.getElementById('aiProgress').style.width = progress + '%';
+                this.dom.aiProgress.style.width = progress + '%';
             }
 
             setupControls() {
@@ -1008,7 +1047,7 @@
                     const stateBefore = this.player.getState(this.maze);
 
                     this.player.move(dx, dy, this.maze);
-                    document.getElementById('playerScore').textContent = this.player.score;
+                    this.dom.playerScore.textContent = this.player.score;
 
                     // Record this move for AI to learn from
                     this.agent.recordDemonstration(stateBefore, action);
@@ -1084,7 +1123,7 @@
                     this.agent.endEpisode();
                 }
 
-                document.getElementById('aiScore').textContent = this.ai.score;
+                this.dom.aiScore.textContent = this.ai.score;
                 this.updateAIDisplay();
                 this.checkGameOver();
             }
@@ -1234,78 +1273,64 @@
 
             endGame() {
                 this.gameOver = true;
-                const modal = document.getElementById('modal');
-                const title = document.getElementById('modalTitle');
-                const message = document.getElementById('modalMessage');
 
-                document.getElementById('finalPlayerScore').textContent = this.player.score;
-                document.getElementById('finalAiScore').textContent = this.ai.score;
+                this.dom.finalPlayerScore.textContent = this.player.score;
+                this.dom.finalAiScore.textContent = this.ai.score;
 
                 // Update AI learning statistics
-                document.getElementById('finalDemonstrations').textContent = this.agent.demonstrations.length;
-                document.getElementById('finalEpisodes').textContent = this.agent.episodes;
-                document.getElementById('finalEpsilon').textContent = Math.round(this.agent.epsilon * 100);
-                document.getElementById('finalQTableSize').textContent = Object.keys(this.agent.qTable).length;
+                this.dom.finalDemonstrations.textContent = this.agent.demonstrations.length;
+                this.dom.finalEpisodes.textContent = this.agent.episodes;
+                this.dom.finalEpsilon.textContent = Math.round(this.agent.epsilon * 100);
+                this.dom.finalQTableSize.textContent = this.agent.getQTableSize();
 
-                // Determine AI mode
-                let aiModeText = 'EXPLORING';
-                if (this.agent.demonstrations.length > 0 && this.agent.imitationWeight > 0.5) {
-                    aiModeText = 'IMITATING';
-                } else if (this.agent.epsilon > 0.5) {
-                    aiModeText = 'EXPLORING';
-                } else if (this.agent.epsilon > 0.2) {
-                    aiModeText = 'LEARNING';
-                } else {
-                    aiModeText = 'SMART';
-                }
-                document.getElementById('finalAIMode').textContent = aiModeText;
+                // Use centralized AI mode determination
+                this.dom.finalAIMode.textContent = this.agent.getAIMode();
 
                 // Generate progress message
-                const progressMsg = document.getElementById('aiProgressMessage');
                 if (this.agent.episodes >= 50) {
-                    progressMsg.textContent = '🎓 AI has completed maximum training games!';
-                    progressMsg.style.color = '#0f0';
+                    this.dom.aiProgressMessage.textContent = '🎓 AI has completed maximum training games!';
+                    this.dom.aiProgressMessage.style.color = '#0f0';
                 } else if (this.agent.demonstrations.length === 0) {
-                    progressMsg.textContent = '💡 Teach the AI by showing it how to reach the goal!';
-                    progressMsg.style.color = '#ff0';
+                    this.dom.aiProgressMessage.textContent = '💡 Teach the AI by showing it how to reach the goal!';
+                    this.dom.aiProgressMessage.style.color = '#ff0';
                 } else if (this.agent.demonstrations.length < 5) {
-                    progressMsg.textContent = '📚 More demonstrations will help the AI learn faster!';
-                    progressMsg.style.color = '#0ff';
+                    this.dom.aiProgressMessage.textContent = '📚 More demonstrations will help the AI learn faster!';
+                    this.dom.aiProgressMessage.style.color = '#0ff';
                 } else if (this.agent.epsilon < 0.2) {
-                    progressMsg.textContent = '🌟 AI is getting smart! Keep training for mastery!';
-                    progressMsg.style.color = '#0f0';
+                    this.dom.aiProgressMessage.textContent = '🌟 AI is getting smart! Keep training for mastery!';
+                    this.dom.aiProgressMessage.style.color = '#0f0';
                 } else {
-                    progressMsg.textContent = '📈 Good progress! AI is learning from your examples!';
-                    progressMsg.style.color = '#0ff';
+                    this.dom.aiProgressMessage.textContent = '📈 Good progress! AI is learning from your examples!';
+                    this.dom.aiProgressMessage.style.color = '#0ff';
                 }
 
                 if (this.player.score > this.ai.score) {
-                    title.textContent = '🎉 YOU WIN!';
-                    title.style.color = '#4af';
-                    message.textContent = 'You collected more gems than the AI!';
+                    this.dom.modalTitle.textContent = '🎉 YOU WIN!';
+                    this.dom.modalTitle.style.color = '#4af';
+                    this.dom.modalMessage.textContent = 'You collected more gems than the AI!';
                 } else if (this.ai.score > this.player.score) {
-                    title.textContent = '🤖 AI WINS!';
-                    title.style.color = '#0ff';
-                    message.textContent = 'The AI outperformed you!';
+                    this.dom.modalTitle.textContent = '🤖 AI WINS!';
+                    this.dom.modalTitle.style.color = '#0ff';
+                    this.dom.modalMessage.textContent = 'The AI outperformed you!';
                 } else {
-                    title.textContent = '🤝 TIE!';
-                    title.style.color = '#ff0';
-                    message.textContent = 'Equal performance!';
+                    this.dom.modalTitle.textContent = '🤝 TIE!';
+                    this.dom.modalTitle.style.color = '#ff0';
+                    this.dom.modalMessage.textContent = 'Equal performance!';
                 }
 
-                modal.style.display = 'block';
+                this.dom.modal.style.display = 'block';
             }
 
             nextLevel() {
                 this.level++;
-                document.getElementById('modal').style.display = 'none';
+                this.dom.modal.style.display = 'none';
                 this.init();
             }
 
             restart() {
                 this.level = 1;
                 this.agent = new DQNAgent(11, 4); // Reset AI with new state representation
-                document.getElementById('modal').style.display = 'none';
+                this.dom.modal.style.display = 'none';
                 this.init();
             }
 
@@ -1334,8 +1359,8 @@
                     },
                     qTable: this.agent.qTable,
                     qTableStats: {
-                        totalStates: Object.keys(this.agent.qTable).length,
-                        totalQValues: Object.keys(this.agent.qTable).length * this.agent.actionSize,
+                        totalStates: this.agent.getQTableSize(),
+                        totalQValues: this.agent.getQTableSize() * this.agent.actionSize,
                         sampleStates: Object.keys(this.agent.qTable).slice(0, 5)
                     },
                     demonstrations: this.agent.demonstrations,
