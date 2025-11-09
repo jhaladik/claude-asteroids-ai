@@ -1,0 +1,1907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Maze Runner - DQN AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #1a1a2e;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            touch-action: none;
+            color: #fff;
+        }
+
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #0f0f1e;
+            touch-action: none;
+            border: 2px solid #16213e;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 10;
+            min-width: 280px;
+            max-width: 90%;
+            transition: all 0.3s ease;
+        }
+
+        #ui.minimized {
+            padding: 8px 15px;
+        }
+
+        #ui.minimized #uiContent {
+            display: none;
+        }
+
+        .minimize-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .minimize-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #ui div {
+            margin: 5px 0;
+        }
+
+        .player-stat {
+            color: #4af;
+        }
+
+        .ai-stat {
+            color: #0ff;
+        }
+
+        .ai-learning {
+            color: #f0f;
+            font-size: 12px;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .dpad {
+            position: relative;
+            width: 200px;
+            height: 200px;
+        }
+
+        .btn {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            background: rgba(100, 100, 255, 0.3);
+            border: 2px solid rgba(100, 100, 255, 0.6);
+            color: #fff;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .btn:active {
+            background: rgba(100, 100, 255, 0.6);
+            transform: scale(0.95);
+        }
+
+        .btn-up { top: 0; left: 70px; }
+        .btn-down { bottom: 0; left: 70px; }
+        .btn-left { top: 70px; left: 0; }
+        .btn-right { top: 70px; right: 0; }
+
+        #modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            border: 3px solid #4af;
+            text-align: center;
+            display: none;
+            z-index: 200;
+            max-width: 90%;
+        }
+
+        #modal h1 {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+
+        #modal button {
+            background: #4444ff;
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            font-family: 'Courier New', monospace;
+        }
+
+        #modal button:active {
+            background: #6666ff;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f0f, #0ff);
+            transition: width 0.3s;
+        }
+
+        .ai-mode {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .exploring {
+            background: #f0f;
+            color: #fff;
+        }
+
+        .exploiting {
+            background: #0ff;
+            color: #000;
+        }
+
+        .info-icon {
+            cursor: help;
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            background: #666;
+            color: #fff;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 14px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        @media (max-width: 600px) {
+            #ui {
+                font-size: 11px;
+                padding: 8px 10px;
+                min-width: 250px;
+            }
+            .ai-learning {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui">
+        <button class="minimize-btn" onclick="toggleUI()" id="minimizeBtn">−</button>
+        <div style="font-size: 15px; margin-bottom: 8px; color: #ff0; text-align: center;">🏆 MAZE RUNNER</div>
+
+        <div id="uiContent">
+            <div style="display: flex; justify-content: space-between;">
+                <div class="player-stat">👤 YOU: <span id="playerScore">0</span></div>
+                <div class="ai-stat">🤖 AI: <span id="aiScore">0</span></div>
+            </div>
+            <div style="margin-top: 8px; text-align: center;">Level: <span id="level">1</span></div>
+
+            <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">
+                <div class="ai-learning" style="margin-bottom: 5px;">
+                    🧠 AI Training
+                    <span id="aiMode" class="ai-mode exploring">EXPLORING</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="aiProgress" style="width: 0%"></div>
+                </div>
+                <div class="ai-learning">
+                    👁️ Learning from You: <span id="demonstrations">0</span>/10
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">AI watches your successful paths and learns to copy them! Each time you reach the goal, the AI records your moves and uses them to improve. The AI keeps your 10 most recent successful demonstrations. Older demonstrations are replaced as you complete new ones, so the AI always learns from your latest strategies.</span>
+                    </div>
+                </div>
+                <div class="ai-learning">
+                    Training Games: <span id="episodes">0</span>/50
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Each time the AI reaches the goal flag 🏁, it completes one training game and learns from the experience. This counter shows how many times the AI has reached the goal (NOT how many gems collected).</span>
+                    </div>
+                </div>
+                <div class="ai-learning">
+                    Randomness: <span id="epsilon">100</span>%
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">How often AI tries random moves vs using learned strategy. Starts at 100% (random exploring), drops to 1% (using knowledge).</span>
+                    </div>
+                </div>
+                <div class="ai-learning">
+                    Q-Table Size: <span id="qtableSize">0</span> states
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Number of unique game situations the AI has learned about. More states = more experience!</span>
+                    </div>
+                </div>
+                <div class="ai-learning">
+                    🧮 Complexity: <span id="complexity">0</span>/100 <span id="splitIndicator"></span>
+                    <div class="tooltip">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Environment complexity score based on gems, walls, and maze size. Above 40 = AI should consider splitting attention into specialized agents (Explorer + Collector).</span>
+                    </div>
+                </div>
+                <div style="margin-top: 8px; text-align: center;">
+                    <button onclick="game.downloadLearningData()" style="background: #0a0; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace; margin: 2px;">
+                        💾 Download Data
+                    </button>
+                    <button onclick="game.resetAI()" style="background: #f44; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace; margin: 2px;">
+                        🔄 Reset AI
+                    </button>
+                    <div class="tooltip" style="display: inline;">
+                        <span class="info-icon">?</span>
+                        <span class="tooltiptext">Download: Save AI learning data as JSON file for analysis. Reset: Clears all saved learning, AI starts from scratch.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div class="dpad">
+            <div class="btn btn-up" id="btnUp">▲</div>
+            <div class="btn btn-down" id="btnDown">▼</div>
+            <div class="btn btn-left" id="btnLeft">◄</div>
+            <div class="btn btn-right" id="btnRight">►</div>
+        </div>
+    </div>
+
+    <div id="modal">
+        <h1 id="modalTitle">Level Complete!</h1>
+        <p id="modalMessage"></p>
+        <div style="margin: 20px 0;">
+            <div>Your Score: <span id="finalPlayerScore">0</span></div>
+            <div>AI Score: <span id="finalAiScore">0</span></div>
+        </div>
+        <div style="margin: 20px 0; padding: 15px; background: rgba(0,255,255,0.1); border-radius: 8px; border: 1px solid rgba(0,255,255,0.3);">
+            <div style="font-size: 14px; color: #0ff; margin-bottom: 10px; font-weight: bold;">📊 AI Learning Progress</div>
+            <div style="font-size: 12px; margin: 5px 0;">👁️ Demonstrations Learned: <span id="finalDemonstrations">0</span>/10</div>
+            <div style="font-size: 12px; margin: 5px 0;">🎯 Training Games Completed: <span id="finalEpisodes">0</span>/50</div>
+            <div style="font-size: 12px; margin: 5px 0;">🎲 Randomness Level: <span id="finalEpsilon">100</span>%</div>
+            <div style="font-size: 12px; margin: 5px 0;">🧠 AI Mode: <span id="finalAIMode">EXPLORING</span></div>
+            <div style="font-size: 12px; margin: 5px 0;">📚 States Learned: <span id="finalQTableSize">0</span></div>
+            <div style="font-size: 11px; margin-top: 8px; color: #aaa; font-style: italic;" id="aiProgressMessage">Keep playing to help the AI learn!</div>
+        </div>
+        <button onclick="game.nextLevel()">Next Level</button>
+        <button onclick="game.restart()">Restart</button>
+    </div>
+
+    <script>
+        // UI Toggle Function
+        function toggleUI() {
+            const ui = document.getElementById('ui');
+            const btn = document.getElementById('minimizeBtn');
+            ui.classList.toggle('minimized');
+            btn.textContent = ui.classList.contains('minimized') ? '+' : '−';
+        }
+
+        // Simple DQN Implementation with Imitation Learning
+        class DQNAgent {
+            constructor(stateSize, actionSize) {
+                this.stateSize = stateSize;
+                this.actionSize = actionSize;
+                this.memory = [];
+                this.maxMemory = 2000;
+                this.gamma = 0.95; // Discount factor
+                this.epsilon = 1.0; // Exploration rate
+                this.epsilonMin = 0.01;
+                this.epsilonDecay = 0.98; // Faster decay: 50 games → 36% randomness (was 0.995 → 78%)
+                this.learningRate = 0.001;
+                this.episodes = 0;
+
+                // Simple Q-table instead of neural network (easier for browser)
+                this.qTable = {};
+
+                // Imitation Learning: Store successful human demonstrations
+                this.demonstrations = [];
+                this.currentDemonstration = [];
+                this.maxDemonstrations = 10;
+                this.imitationWeight = 1.0; // Start with full imitation
+                this.imitationDecay = 0.95; // Decrease reliance on demonstrations
+
+                // Load saved progress
+                this.loadProgress();
+            }
+
+            getStateKey(state) {
+                return state.join(',');
+            }
+
+            getQValues(state) {
+                const key = this.getStateKey(state);
+                if (!this.qTable[key]) {
+                    this.qTable[key] = new Array(this.actionSize).fill(0);
+                }
+                return this.qTable[key];
+            }
+
+            act(state) {
+                // First, try to use imitation learning if we have demonstrations
+                if (this.demonstrations.length > 0 && Math.random() < this.imitationWeight) {
+                    const demonstratedAction = this.getDemonstratedAction(state);
+                    if (demonstratedAction !== null) {
+                        return demonstratedAction;
+                    }
+                }
+
+                // Epsilon-greedy policy
+                if (Math.random() < this.epsilon) {
+                    return Math.floor(Math.random() * this.actionSize);
+                }
+
+                const qValues = this.getQValues(state);
+                return qValues.indexOf(Math.max(...qValues));
+            }
+
+            getDemonstratedAction(state) {
+                // Look for this state in demonstrations and return most common action
+                const stateKey = this.getStateKey(state);
+                const actions = [];
+
+                for (const demo of this.demonstrations) {
+                    for (const step of demo) {
+                        if (this.getStateKey(step.state) === stateKey) {
+                            actions.push(step.action);
+                        }
+                    }
+                }
+
+                if (actions.length === 0) return null;
+
+                // Return most common action
+                const actionCounts = {};
+                for (const action of actions) {
+                    actionCounts[action] = (actionCounts[action] || 0) + 1;
+                }
+
+                let bestAction = null;
+                let maxCount = 0;
+                for (const [action, count] of Object.entries(actionCounts)) {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        bestAction = parseInt(action);
+                    }
+                }
+
+                return bestAction;
+            }
+
+            recordDemonstration(state, action) {
+                // Record a state-action pair from human player
+                this.currentDemonstration.push({ state: [...state], action });
+            }
+
+            completeDemonstration(successful) {
+                // Called when player reaches goal or fails
+                if (successful && this.currentDemonstration.length > 0) {
+                    this.demonstrations.push([...this.currentDemonstration]);
+
+                    // Keep only the most recent demonstrations
+                    if (this.demonstrations.length > this.maxDemonstrations) {
+                        this.demonstrations.shift();
+                    }
+
+                    // Learn from the demonstration immediately
+                    this.learnFromDemonstration(this.currentDemonstration);
+
+                    console.log(`✨ AI learned from your path! (${this.demonstrations.length} total demonstrations)`);
+                }
+                this.currentDemonstration = [];
+            }
+
+            learnFromDemonstration(demonstration) {
+                // Pre-train Q-values using the demonstration
+                for (let i = 0; i < demonstration.length - 1; i++) {
+                    const { state, action } = demonstration[i];
+                    const nextState = demonstration[i + 1].state;
+
+                    // Give positive reward for demonstrated actions
+                    const reward = i === demonstration.length - 2 ? 100 : 1;
+
+                    const stateKey = this.getStateKey(state);
+                    if (!this.qTable[stateKey]) {
+                        this.qTable[stateKey] = new Array(this.actionSize).fill(0);
+                    }
+
+                    const nextQValues = this.getQValues(nextState);
+                    const target = reward + this.gamma * Math.max(...nextQValues);
+
+                    // Update Q-value with higher learning rate for demonstrations
+                    this.qTable[stateKey][action] +=
+                        0.1 * (target - this.qTable[stateKey][action]);
+                }
+            }
+
+            remember(state, action, reward, nextState, done) {
+                this.memory.push({ state, action, reward, nextState, done });
+                if (this.memory.length > this.maxMemory) {
+                    this.memory.shift();
+                }
+            }
+
+            replay(batchSize = 32) {
+                if (this.memory.length < batchSize) return;
+
+                const batch = [];
+                for (let i = 0; i < batchSize; i++) {
+                    const idx = Math.floor(Math.random() * this.memory.length);
+                    batch.push(this.memory[idx]);
+                }
+
+                for (const { state, action, reward, nextState, done } of batch) {
+                    const stateKey = this.getStateKey(state);
+                    if (!this.qTable[stateKey]) {
+                        this.qTable[stateKey] = new Array(this.actionSize).fill(0);
+                    }
+
+                    let target = reward;
+                    if (!done) {
+                        const nextQValues = this.getQValues(nextState);
+                        target += this.gamma * Math.max(...nextQValues);
+                    }
+
+                    // Q-learning update
+                    this.qTable[stateKey][action] +=
+                        this.learningRate * (target - this.qTable[stateKey][action]);
+                }
+
+                if (this.epsilon > this.epsilonMin) {
+                    this.epsilon *= this.epsilonDecay;
+                }
+            }
+
+            endEpisode() {
+                this.episodes++;
+                this.replay(32);
+
+                // Gradually decrease reliance on demonstrations as AI learns
+                if (this.imitationWeight > 0.1) {
+                    this.imitationWeight *= this.imitationDecay;
+                }
+
+                this.saveProgress();
+            }
+
+            saveProgress() {
+                const progress = {
+                    qTable: this.qTable,
+                    epsilon: this.epsilon,
+                    episodes: this.episodes,
+                    demonstrations: this.demonstrations,
+                    imitationWeight: this.imitationWeight
+                };
+                try {
+                    localStorage.setItem('mazeRunnerAI', JSON.stringify(progress));
+                } catch (e) {
+                    console.warn('Failed to save AI progress:', e);
+                }
+            }
+
+            loadProgress() {
+                try {
+                    const saved = localStorage.getItem('mazeRunnerAI');
+                    if (saved) {
+                        const progress = JSON.parse(saved);
+                        this.qTable = progress.qTable || {};
+                        this.epsilon = progress.epsilon || 1.0;
+                        this.episodes = progress.episodes || 0;
+                        this.demonstrations = progress.demonstrations || [];
+                        this.imitationWeight = progress.imitationWeight || 1.0;
+                        console.log(`Loaded AI progress: ${this.episodes} episodes, ${this.demonstrations.length} demonstrations, ${Math.round(this.epsilon * 100)}% randomness`);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load AI progress:', e);
+                }
+            }
+
+            resetProgress() {
+                this.qTable = {};
+                this.epsilon = 1.0;
+                this.episodes = 0;
+                this.memory = [];
+                this.demonstrations = [];
+                this.imitationWeight = 1.0;
+                this.currentDemonstration = [];
+                try {
+                    localStorage.removeItem('mazeRunnerAI');
+                } catch (e) {
+                    console.warn('Failed to clear AI progress:', e);
+                }
+            }
+
+            getQTableSize() {
+                return Object.keys(this.qTable).length;
+            }
+
+            getAIMode() {
+                // Centralized AI mode determination logic
+                if (this.demonstrations.length > 0 && this.imitationWeight > 0.5) {
+                    return 'IMITATING';
+                } else if (this.epsilon > 0.5) {
+                    return 'EXPLORING';
+                } else if (this.epsilon > 0.2) {
+                    return 'LEARNING';
+                } else {
+                    return 'SMART';
+                }
+            }
+        }
+
+        // ExplorerAgent: Specialized for FAST navigation to goal
+        // Uses SAME 11-feature state as Collector (enables knowledge transfer!)
+        // Differentiation happens via REWARDS, not state representation
+        class ExplorerAgent extends DQNAgent {
+            constructor(complexityScore = 40) {
+                super(11, 4); // SAME 11-feature state as Collector (knowledge transfer compatible!)
+                this.agentType = 'EXPLORER';
+
+                // 🔥 ADAPTIVE HYPERPARAMETERS based on complexity
+                // Higher complexity = slower learning, more exploration, longer planning
+                const complexityFactor = complexityScore / 100; // 0.0 to 1.0
+
+                // Epsilon decay: slower in complex mazes (more exploration needed)
+                // Simple maze (20): 0.95, Complex maze (80): 0.97
+                this.epsilonDecay = 0.95 + (complexityFactor * 0.02);
+
+                // Learning rate: slower in complex mazes (more careful learning)
+                // Simple: 0.0015, Complex: 0.0005
+                this.learningRate = 0.0015 - (complexityFactor * 0.001);
+
+                // Gamma: higher in complex mazes (longer-term planning)
+                // Simple: 0.98, Complex: 0.99
+                this.gamma = 0.98 + (complexityFactor * 0.01);
+
+                console.log(`🎯 Explorer adapted to complexity ${complexityScore}:`, {
+                    epsilonDecay: this.epsilonDecay.toFixed(4),
+                    learningRate: this.learningRate.toFixed(4),
+                    gamma: this.gamma.toFixed(3)
+                });
+            }
+
+            saveProgress() {
+                const progress = {
+                    qTable: this.qTable,
+                    epsilon: this.epsilon,
+                    episodes: this.episodes,
+                    demonstrations: this.demonstrations,
+                    imitationWeight: this.imitationWeight
+                };
+                try {
+                    localStorage.setItem('mazeRunnerExplorer', JSON.stringify(progress));
+                } catch (e) {
+                    console.warn('Failed to save Explorer progress:', e);
+                }
+            }
+
+            loadProgress() {
+                try {
+                    const saved = localStorage.getItem('mazeRunnerExplorer');
+                    if (saved) {
+                        const progress = JSON.parse(saved);
+                        this.qTable = progress.qTable || {};
+                        this.epsilon = progress.epsilon || 1.0;
+                        this.episodes = progress.episodes || 0;
+                        this.demonstrations = progress.demonstrations || [];
+                        this.imitationWeight = progress.imitationWeight || 1.0;
+                        console.log(`🗺️ Loaded Explorer: ${this.episodes} episodes, ${Math.round(this.epsilon * 100)}% randomness`);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load Explorer progress:', e);
+                }
+            }
+
+            resetProgress() {
+                super.resetProgress();
+                try {
+                    localStorage.removeItem('mazeRunnerExplorer');
+                } catch (e) {
+                    console.warn('Failed to clear Explorer progress:', e);
+                }
+            }
+        }
+
+        // CollectorAgent: Specialized for gem collection optimization
+        class CollectorAgent extends DQNAgent {
+            constructor(complexityScore = 40) {
+                super(11, 4); // Full state: 11 features (includes gems), 4 actions
+                this.agentType = 'COLLECTOR';
+
+                // 🔥 ADAPTIVE HYPERPARAMETERS based on complexity
+                const complexityFactor = complexityScore / 100;
+
+                // Epsilon decay: slower in complex mazes (need more exploration for gems)
+                // Simple maze (20): 0.98, Complex maze (80): 0.99
+                this.epsilonDecay = 0.98 + (complexityFactor * 0.01);
+
+                // Learning rate: slower in complex mazes
+                // Simple: 0.0012, Complex: 0.0006
+                this.learningRate = 0.0012 - (complexityFactor * 0.0006);
+
+                // Gamma: balanced for gem collection
+                // Simple: 0.95, Complex: 0.97
+                this.gamma = 0.95 + (complexityFactor * 0.02);
+
+                console.log(`💎 Collector adapted to complexity ${complexityScore}:`, {
+                    epsilonDecay: this.epsilonDecay.toFixed(4),
+                    learningRate: this.learningRate.toFixed(4),
+                    gamma: this.gamma.toFixed(3)
+                });
+            }
+
+            saveProgress() {
+                const progress = {
+                    qTable: this.qTable,
+                    epsilon: this.epsilon,
+                    episodes: this.episodes,
+                    demonstrations: this.demonstrations,
+                    imitationWeight: this.imitationWeight
+                };
+                try {
+                    localStorage.setItem('mazeRunnerCollector', JSON.stringify(progress));
+                } catch (e) {
+                    console.warn('Failed to save Collector progress:', e);
+                }
+            }
+
+            loadProgress() {
+                try {
+                    const saved = localStorage.getItem('mazeRunnerCollector');
+                    if (saved) {
+                        const progress = JSON.parse(saved);
+                        this.qTable = progress.qTable || {};
+                        this.epsilon = progress.epsilon || 1.0;
+                        this.episodes = progress.episodes || 0;
+                        this.demonstrations = progress.demonstrations || [];
+                        this.imitationWeight = progress.imitationWeight || 1.0;
+                        console.log(`💎 Loaded Collector: ${this.episodes} episodes, ${Math.round(this.epsilon * 100)}% randomness`);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load Collector progress:', e);
+                }
+            }
+
+            resetProgress() {
+                super.resetProgress();
+                try {
+                    localStorage.removeItem('mazeRunnerCollector');
+                } catch (e) {
+                    console.warn('Failed to clear Collector progress:', e);
+                }
+            }
+        }
+
+        // AgentCoordinator: Manages multi-agent system
+        class AgentCoordinator {
+            constructor(complexity) {
+                // Pass complexity score to agents for adaptive hyperparameters
+                this.explorer = new ExplorerAgent(complexity.score);
+                this.collector = new CollectorAgent(complexity.score);
+                this.complexity = complexity;
+                this.activeAgent = null;
+                this.splitMode = complexity.recommendSplit;
+
+                // Performance tracking
+                this.explorerSuccesses = 0;
+                this.collectorSuccesses = 0;
+
+                // Determine initial agent based on complexity
+                if (this.splitMode) {
+                    // High complexity: Start with explorer to map maze
+                    this.activeAgent = this.explorer;
+                    console.log('🧠 Multi-agent mode activated! Starting with EXPLORER');
+                    console.log(`   Complexity: ${complexity.score}/100 (${complexity.gemCount} gems, ${complexity.wallDensity}% walls)`);
+                } else {
+                    // Low complexity: Use collector (standard mode)
+                    this.activeAgent = this.collector;
+                    console.log('🧠 Single-agent mode: Using COLLECTOR');
+                }
+            }
+
+            getActiveAgent() {
+                return this.activeAgent;
+            }
+
+            getActiveAgentType() {
+                return this.activeAgent.agentType;
+            }
+
+            // Switch agent based on learning progress + TRANSFER KNOWLEDGE
+            switchAgent() {
+                if (!this.splitMode) return; // Don't switch in single-agent mode
+
+                const explorerLearned = this.explorer.epsilon < 0.3 && this.explorer.episodes > 10;
+                const collectorNeedsHelp = this.collector.epsilon > 0.5 || this.collector.episodes < 5;
+
+                // Switch from explorer to collector once maze is mapped
+                if (this.activeAgent === this.explorer && explorerLearned) {
+                    // 🔥 KNOWLEDGE TRANSFER: Copy Explorer's Q-table to Collector!
+                    // Both use same 11-feature state, so Q-tables are compatible
+                    if (this.collector.episodes === 0) {
+                        // First-time transfer: Collector inherits Explorer's navigation knowledge
+                        this.collector.qTable = JSON.parse(JSON.stringify(this.explorer.qTable));
+
+                        // 🔥 CRITICAL FIX #1: Add optimism bonus to Q-values
+                        // Explorer's Q-table has negative values for "non-goal" actions
+                        // Add small bonus to encourage Collector to try gem-collecting actions
+                        const optimismBonus = 5; // Small positive boost
+                        for (const stateKey in this.collector.qTable) {
+                            for (let i = 0; i < this.collector.qTable[stateKey].length; i++) {
+                                this.collector.qTable[stateKey][i] += optimismBonus;
+                            }
+                        }
+
+                        // 🔥 CRITICAL FIX #2: Reset epsilon to enable gem strategy relearning!
+                        // Explorer's Q-table says "ignore gems", but Collector needs "collect gems"
+                        // Higher epsilon = more exploration = can override inherited "ignore gems" patterns
+                        this.collector.epsilon = 0.6; // 60% exploration to learn new gem-focused strategy
+
+                        console.log(`📚 Knowledge Transfer: Copied ${Object.keys(this.explorer.qTable).length} navigation patterns to Collector!`);
+                        console.log(`   🎁 Added optimism bonus (+${optimismBonus}) to all Q-values`);
+                        console.log(`   ⚠️ Epsilon reset to 60% (not ${Math.round(this.explorer.epsilon * 100)}%)`);
+                        console.log(`   Why? Explorer learned "ignore gems", Collector needs to UNLEARN and learn "collect gems"`);
+                        console.log(`   Strategy: High exploration + optimistic Q-values = override conflicting patterns`);
+                    }
+
+                    this.activeAgent = this.collector;
+                    console.log('🔄 Switching to COLLECTOR (navigation learned, now optimize gems)');
+                    return 'COLLECTOR';
+                }
+
+                // Switch back to explorer if collector is struggling
+                if (this.activeAgent === this.collector && collectorNeedsHelp && !explorerLearned) {
+                    this.activeAgent = this.explorer;
+                    console.log('🔄 Switching back to EXPLORER (collector needs more map data)');
+                    return 'EXPLORER';
+                }
+
+                return this.activeAgent.agentType;
+            }
+
+            // Record success for active agent
+            recordSuccess() {
+                if (this.activeAgent === this.explorer) {
+                    this.explorerSuccesses++;
+                } else {
+                    this.collectorSuccesses++;
+                }
+            }
+
+            // Get combined statistics
+            getCombinedStats() {
+                return {
+                    totalEpisodes: this.explorer.episodes + this.collector.episodes,
+                    explorerEpisodes: this.explorer.episodes,
+                    collectorEpisodes: this.collector.episodes,
+                    explorerEpsilon: this.explorer.epsilon,
+                    collectorEpsilon: this.collector.epsilon,
+                    explorerQTable: this.explorer.getQTableSize(),
+                    collectorQTable: this.collector.getQTableSize(),
+                    totalQTable: this.explorer.getQTableSize() + this.collector.getQTableSize(),
+                    splitMode: this.splitMode,
+                    activeAgent: this.activeAgent.agentType,
+                    runtimeComplexity: this.complexity.score
+                };
+            }
+
+            // 🔥 DYNAMIC ADAPTATION: Update complexity and adapt agent parameters
+            updateComplexity(maze, exploredCells, successRate) {
+                const totalEpisodes = this.explorer.episodes + this.collector.episodes;
+
+                // Skip updates during early learning (first 5 episodes)
+                if (totalEpisodes < 5) return;
+
+                // Calculate runtime complexity
+                const newComplexity = maze.calculateRuntimeComplexity(
+                    exploredCells,
+                    successRate,
+                    totalEpisodes
+                );
+
+                // Only update if complexity changed significantly (>10 points)
+                const complexityChange = Math.abs(newComplexity.score - this.complexity.score);
+                if (complexityChange > 10) {
+                    console.log(`📊 Complexity updated: ${this.complexity.score} → ${newComplexity.score}`);
+                    console.log(`   Factors:`, newComplexity.adaptiveFactors);
+
+                    this.complexity = newComplexity;
+
+                    // Adapt agent hyperparameters to new complexity
+                    this.adaptAgentParameters(newComplexity.score);
+                }
+            }
+
+            // Adapt agent learning parameters based on new complexity
+            adaptAgentParameters(complexityScore) {
+                const complexityFactor = complexityScore / 100;
+
+                // Update Explorer parameters
+                const newExplorerDecay = 0.95 + (complexityFactor * 0.02);
+                const newExplorerLR = 0.0015 - (complexityFactor * 0.001);
+                const newExplorerGamma = 0.98 + (complexityFactor * 0.01);
+
+                this.explorer.epsilonDecay = newExplorerDecay;
+                this.explorer.learningRate = newExplorerLR;
+                this.explorer.gamma = newExplorerGamma;
+
+                // Update Collector parameters
+                const newCollectorDecay = 0.98 + (complexityFactor * 0.01);
+                const newCollectorLR = 0.0012 - (complexityFactor * 0.0006);
+                const newCollectorGamma = 0.95 + (complexityFactor * 0.02);
+
+                this.collector.epsilonDecay = newCollectorDecay;
+                this.collector.learningRate = newCollectorLR;
+                this.collector.gamma = newCollectorGamma;
+
+                console.log(`⚙️ Agents adapted:`, {
+                    explorer: {decay: newExplorerDecay.toFixed(4), lr: newExplorerLR.toFixed(4)},
+                    collector: {decay: newCollectorDecay.toFixed(4), lr: newCollectorLR.toFixed(4)}
+                });
+            }
+
+            resetAll() {
+                this.explorer.resetProgress();
+                this.collector.resetProgress();
+                this.explorerSuccesses = 0;
+                this.collectorSuccesses = 0;
+            }
+        }
+
+        // Game Configuration
+        const config = {
+            gridSize: 15,
+            cellSize: 30,
+            fps: 10
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            // Account for UI (~180px) and controls (220px) plus margins
+            const availableHeight = window.innerHeight - 420;
+            const availableWidth = window.innerWidth - 20;
+            const size = Math.min(availableWidth, availableHeight, 450); // Max 450px
+
+            config.cellSize = Math.floor(size / config.gridSize);
+            canvas.width = config.gridSize * config.cellSize;
+            canvas.height = config.gridSize * config.cellSize;
+
+            // Add enough top margin to clear the UI
+            canvas.style.marginTop = '200px';
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Maze Generator (Simple)
+        class Maze {
+            constructor(size) {
+                this.size = size;
+                this.grid = [];
+                this.generate();
+            }
+
+            generate() {
+                // Create grid
+                for (let y = 0; y < this.size; y++) {
+                    this.grid[y] = [];
+                    for (let x = 0; x < this.size; x++) {
+                        // Border walls
+                        if (x === 0 || x === this.size - 1 || y === 0 || y === this.size - 1) {
+                            this.grid[y][x] = 1; // Wall
+                        } else {
+                            this.grid[y][x] = 0; // Empty
+                        }
+                    }
+                }
+
+                // Add some random walls and gems
+                for (let i = 0; i < this.size * 2; i++) {
+                    const x = Math.floor(Math.random() * (this.size - 2)) + 1;
+                    const y = Math.floor(Math.random() * (this.size - 2)) + 1;
+
+                    if (Math.random() > 0.5) {
+                        this.grid[y][x] = 1; // Wall
+                    } else {
+                        this.grid[y][x] = 2; // Gem
+                    }
+                }
+
+                // Clear starting positions
+                this.grid[1][1] = 0; // Player start
+                this.grid[1][2] = 0;
+                this.grid[2][1] = 0;
+
+                // Set goal
+                this.grid[this.size - 2][this.size - 2] = 3; // Goal
+            }
+
+            isWall(x, y) {
+                if (x < 0 || x >= this.size || y < 0 || y >= this.size) return true;
+                return this.grid[y][x] === 1;
+            }
+
+            isGem(x, y) {
+                if (x < 0 || x >= this.size || y < 0 || y >= this.size) return false;
+                return this.grid[y][x] === 2;
+            }
+
+            isGoal(x, y) {
+                if (x < 0 || x >= this.size || y < 0 || y >= this.size) return false;
+                return this.grid[y][x] === 3;
+            }
+
+            collectGem(x, y) {
+                if (this.isGem(x, y)) {
+                    this.grid[y][x] = 0;
+                    return true;
+                }
+                return false;
+            }
+
+            // Calculate environment complexity to determine if AI should split attention
+            calculateComplexity() {
+                let gemCount = 0;
+                let wallCount = 0;
+                let emptyCount = 0;
+
+                for (let y = 0; y < this.size; y++) {
+                    for (let x = 0; x < this.size; x++) {
+                        const cell = this.grid[y][x];
+                        if (cell === 1) wallCount++;
+                        else if (cell === 2) gemCount++;
+                        else if (cell === 0) emptyCount++;
+                    }
+                }
+
+                const totalCells = this.size * this.size;
+                const wallDensity = wallCount / totalCells;
+                const gemDensity = gemCount / totalCells;
+
+                // Complexity score (0-100)
+                // High complexity = many gems + high wall density + large maze
+                const complexityScore = (
+                    (gemCount * 5) +                    // More gems = more complexity (0-50 points)
+                    (wallDensity * 30) +                // More walls = harder navigation (0-30 points)
+                    (this.size / 15 * 20)               // Bigger maze = more complex (0-20 points)
+                );
+
+                return {
+                    score: Math.min(Math.round(complexityScore), 100),
+                    gemCount,
+                    wallCount,
+                    wallDensity: Math.round(wallDensity * 100),
+                    gemDensity: Math.round(gemDensity * 100),
+                    mazeSize: this.size,
+                    recommendSplit: complexityScore > 40 // Threshold for splitting
+                };
+            }
+
+            // 🔥 DYNAMIC COMPLEXITY: Recalculate complexity based on runtime factors
+            calculateRuntimeComplexity(exploredCells, agentPerformance, episodes) {
+                const baseComplexity = this.calculateComplexity();
+
+                // Factor 1: Remaining gems (decreases complexity over time)
+                const totalCells = this.size * this.size;
+                const remainingGemFactor = baseComplexity.gemCount / 10 * 10; // 0-10 points
+
+                // Factor 2: Unexplored area (more unexplored = more complex)
+                const explorationFactor = (1 - exploredCells / totalCells) * 20; // 0-20 points
+
+                // Factor 3: Learning progress (better performance = effectively less complex)
+                // Performance: 0.0 (terrible) to 1.0 (perfect)
+                const performancePenalty = (1 - agentPerformance) * 15; // 0-15 points
+
+                // Factor 4: Episode count (early episodes = higher effective complexity)
+                const experienceFactor = Math.max(0, (50 - episodes) / 50) * 10; // 0-10 points
+
+                const runtimeScore = Math.min(Math.round(
+                    remainingGemFactor +
+                    explorationFactor +
+                    performancePenalty +
+                    experienceFactor +
+                    (baseComplexity.wallDensity * 0.2) + // Wall factor
+                    (this.size / 15 * 10) // Size factor
+                ), 100);
+
+                return {
+                    score: runtimeScore,
+                    baseScore: baseComplexity.score,
+                    gemCount: baseComplexity.gemCount,
+                    wallCount: baseComplexity.wallCount,
+                    wallDensity: baseComplexity.wallDensity,
+                    exploredPercent: Math.round(exploredCells / totalCells * 100),
+                    performance: Math.round(agentPerformance * 100),
+                    recommendSplit: runtimeScore > 40,
+                    adaptiveFactors: {
+                        remainingGems: Math.round(remainingGemFactor),
+                        exploration: Math.round(explorationFactor),
+                        performance: Math.round(performancePenalty),
+                        experience: Math.round(experienceFactor)
+                    }
+                };
+            }
+
+            draw() {
+                for (let y = 0; y < this.size; y++) {
+                    for (let x = 0; x < this.size; x++) {
+                        const cellType = this.grid[y][x];
+                        const px = x * config.cellSize;
+                        const py = y * config.cellSize;
+
+                        switch(cellType) {
+                            case 1: // Wall
+                                ctx.fillStyle = '#2d3561';
+                                ctx.fillRect(px, py, config.cellSize, config.cellSize);
+                                ctx.strokeStyle = '#1a1f3a';
+                                ctx.strokeRect(px, py, config.cellSize, config.cellSize);
+                                break;
+                            case 2: // Gem
+                                ctx.fillStyle = '#0f0f1e';
+                                ctx.fillRect(px, py, config.cellSize, config.cellSize);
+                                ctx.fillStyle = '#ffd700';
+                                ctx.beginPath();
+                                ctx.arc(px + config.cellSize/2, py + config.cellSize/2,
+                                       config.cellSize/4, 0, Math.PI * 2);
+                                ctx.fill();
+                                break;
+                            case 3: // Goal
+                                ctx.fillStyle = '#0f4';
+                                ctx.fillRect(px, py, config.cellSize, config.cellSize);
+                                ctx.fillStyle = '#fff';
+                                ctx.font = `${config.cellSize/2}px Arial`;
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText('🏁', px + config.cellSize/2, py + config.cellSize/2);
+                                break;
+                            default: // Empty
+                                ctx.fillStyle = '#0f0f1e';
+                                ctx.fillRect(px, py, config.cellSize, config.cellSize);
+                                break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Player/AI Character
+        class Character {
+            constructor(x, y, color, name) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.name = name;
+                this.score = 0;
+                this.reachedGoal = false;
+            }
+
+            move(dx, dy, maze, agentType = 'COLLECTOR', complexityScore = 40) {
+                const newX = this.x + dx;
+                const newY = this.y + dy;
+
+                if (!maze.isWall(newX, newY)) {
+                    // Store old position to calculate progress
+                    const oldDistance = Math.abs(this.x - (maze.size - 2)) + Math.abs(this.y - (maze.size - 2));
+
+                    this.x = newX;
+                    this.y = newY;
+
+                    const newDistance = Math.abs(this.x - (maze.size - 2)) + Math.abs(this.y - (maze.size - 2));
+                    const madeProgress = newDistance < oldDistance;
+
+                    // Check for gem collection
+                    const collectedGem = maze.collectGem(newX, newY);
+                    if (collectedGem) {
+                        this.score += 10;
+                    }
+
+                    // Check for goal
+                    const reachedGoal = maze.isGoal(newX, newY);
+                    if (reachedGoal) {
+                        this.reachedGoal = true;
+                    }
+
+                    // 🔥 MULTI-OBJECTIVE REWARD WEIGHTING
+                    // Instead of binary agent rewards, blend based on complexity and agent type
+                    const complexityFactor = complexityScore / 100; // 0.0 to 1.0
+
+                    // Define base reward components
+                    const navigationReward = reachedGoal ? 100 : (madeProgress ? 1 : -1);
+                    const gemReward = collectedGem ? 50 : 0;
+
+                    // AGENT-SPECIFIC WEIGHTING (still specialized, but with blending)
+                    if (agentType === 'EXPLORER') {
+                        // EXPLORER: Prioritize navigation, but value gems more in complex mazes
+                        // Simple maze: 95% navigation, 5% gems
+                        // Complex maze: 80% navigation, 20% gems
+                        const navWeight = 0.95 - (complexityFactor * 0.15);
+                        const gemWeight = 0.05 + (complexityFactor * 0.15);
+
+                        const blendedReward = (navigationReward * navWeight) + (gemReward * gemWeight);
+                        return blendedReward;
+
+                    } else {
+                        // COLLECTOR: Prioritize gems, but value navigation more in simple mazes
+                        // Simple maze: 60% gems, 40% navigation
+                        // Complex maze: 80% gems, 20% navigation
+                        const gemWeight = 0.60 + (complexityFactor * 0.20);
+                        const navWeight = 0.40 - (complexityFactor * 0.20);
+
+                        const blendedReward = (gemReward * gemWeight) + (navigationReward * navWeight);
+
+                        // Add small progress bonus for Collector
+                        return blendedReward + (madeProgress ? 0.5 : 0);
+                    }
+                }
+
+                // Hit wall - both agents penalized equally
+                return -10;
+            }
+
+            getState(maze) {
+                // OPTIMIZED: Directional state for MUCH smaller Q-table!
+                // Instead of exact distance (15x15=225 combos), use direction (-1,0,1 = only 9 combos)
+                const goalX = maze.size - 2;
+                const goalY = maze.size - 2;
+
+                // Convert exact distance to simple direction
+                const directionX = this.x < goalX ? 1 : (this.x > goalX ? -1 : 0); // -1=west, 0=at goal, 1=east
+                const directionY = this.y < goalY ? 1 : (this.y > goalY ? -1 : 0); // -1=north, 0=at goal, 1=south
+
+                const state = [
+                    // Direction to goal (only 9 combinations instead of 225!)
+                    directionX,  // Goal is left(-1), here(0), or right(1)
+                    directionY,  // Goal is up(-1), here(0), or down(1)
+
+                    // Local walls (transferable pattern!)
+                    maze.isWall(this.x, this.y - 1) ? 1 : 0, // Wall up?
+                    maze.isWall(this.x, this.y + 1) ? 1 : 0, // Wall down?
+                    maze.isWall(this.x - 1, this.y) ? 1 : 0, // Wall left?
+                    maze.isWall(this.x + 1, this.y) ? 1 : 0, // Wall right?
+
+                    // Local gems (transferable pattern!)
+                    maze.isGem(this.x, this.y - 1) ? 1 : 0, // Gem up?
+                    maze.isGem(this.x, this.y + 1) ? 1 : 0, // Gem down?
+                    maze.isGem(this.x - 1, this.y) ? 1 : 0, // Gem left?
+                    maze.isGem(this.x + 1, this.y) ? 1 : 0, // Gem right?
+
+                    // Gem collection progress
+                    Math.min(Math.floor(this.score / 10), 9)  // Gems collected (capped at 9)
+                ];
+                return state;
+            }
+
+            draw() {
+                const px = this.x * config.cellSize;
+                const py = this.y * config.cellSize;
+
+                if (this.reachedGoal) {
+                    ctx.fillStyle = this.color;
+                    ctx.globalAlpha = 0.5;
+                } else {
+                    ctx.fillStyle = this.color;
+                    ctx.globalAlpha = 1;
+                }
+
+                ctx.fillRect(px + 2, py + 2, config.cellSize - 4, config.cellSize - 4);
+                ctx.globalAlpha = 1;
+
+                // Draw name
+                ctx.fillStyle = '#fff';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, px + config.cellSize/2, py - 5);
+            }
+        }
+
+        // Main Game
+        class Game {
+            constructor() {
+                this.maze = null;
+                this.player = null;
+                this.ai = null;
+                this.coordinator = null; // Will be created in init() based on complexity
+                this.level = 1;
+                this.gameOver = false;
+                this.keys = {};
+                this.lastMoveTime = 0;
+                this.aiMoveInterval = 200; // AI moves every 200ms
+                this.normalAISpeed = 200;
+                this.fastAISpeed = 50; // Much faster when player finished
+
+                // Stuck detection
+                this.aiPositionHistory = [];
+                this.maxHistoryLength = 10;
+                this.stuckThreshold = 6; // If 6 of last 10 moves alternate between 2 positions = stuck
+                this.isStuck = false;
+
+                // Cache frequently-used DOM elements
+                this.dom = {
+                    playerScore: document.getElementById('playerScore'),
+                    aiScore: document.getElementById('aiScore'),
+                    level: document.getElementById('level'),
+                    episodes: document.getElementById('episodes'),
+                    demonstrations: document.getElementById('demonstrations'),
+                    epsilon: document.getElementById('epsilon'),
+                    qtableSize: document.getElementById('qtableSize'),
+                    complexity: document.getElementById('complexity'),
+                    splitIndicator: document.getElementById('splitIndicator'),
+                    aiMode: document.getElementById('aiMode'),
+                    aiProgress: document.getElementById('aiProgress'),
+                    modal: document.getElementById('modal'),
+                    modalTitle: document.getElementById('modalTitle'),
+                    modalMessage: document.getElementById('modalMessage'),
+                    finalPlayerScore: document.getElementById('finalPlayerScore'),
+                    finalAiScore: document.getElementById('finalAiScore'),
+                    finalDemonstrations: document.getElementById('finalDemonstrations'),
+                    finalEpisodes: document.getElementById('finalEpisodes'),
+                    finalEpsilon: document.getElementById('finalEpsilon'),
+                    finalQTableSize: document.getElementById('finalQTableSize'),
+                    finalAIMode: document.getElementById('finalAIMode'),
+                    aiProgressMessage: document.getElementById('aiProgressMessage')
+                };
+
+                this.init();
+                this.setupControls();
+                this.gameLoop();
+            }
+
+            init() {
+                this.maze = new Maze(config.gridSize);
+                this.player = new Character(1, 1, '#4af', 'YOU');
+                this.ai = new Character(1, 2, '#0ff', 'AI');
+                this.gameOver = false;
+
+                // 🔥 DYNAMIC COMPLEXITY: Track exploration and performance
+                this.exploredCells = new Set();
+                this.exploredCells.add(`${this.ai.x},${this.ai.y}`);
+                this.aiSuccesses = 0;
+                this.aiAttempts = 0;
+                this.complexityUpdateCounter = 0;
+
+                // Calculate environment complexity
+                this.complexity = this.maze.calculateComplexity();
+                console.log('Environment complexity:', this.complexity);
+
+                // Create AgentCoordinator (on first init) or reuse existing one
+                if (!this.coordinator) {
+                    this.coordinator = new AgentCoordinator(this.complexity);
+                } else {
+                    // Update coordinator with new complexity for this level
+                    this.coordinator.complexity = this.complexity;
+                    this.coordinator.splitMode = this.complexity.recommendSplit;
+
+                    // Re-evaluate which agent should be active
+                    if (this.coordinator.splitMode) {
+                        // Check if we should switch agents
+                        this.coordinator.switchAgent();
+                    }
+                }
+
+                // Clear current demonstration when starting new level
+                this.coordinator.getActiveAgent().currentDemonstration = [];
+
+                // Reset stuck detection
+                this.aiPositionHistory = [];
+                this.isStuck = false;
+                this.aiMoveInterval = this.normalAISpeed;
+                this.hideSkipButton();
+
+                this.dom.playerScore.textContent = this.player.score;
+                this.dom.aiScore.textContent = this.ai.score;
+                this.dom.level.textContent = this.level;
+
+                // Update AI stats display
+                this.updateAIDisplay();
+            }
+
+            updateAIDisplay() {
+                const activeAgent = this.coordinator.getActiveAgent();
+                const stats = this.coordinator.getCombinedStats();
+
+                // Show active agent type in front of mode
+                const agentType = stats.splitMode ?
+                    `<span style="color: ${stats.activeAgent === 'EXPLORER' ? '#ff0' : '#0f0'}; font-weight: bold;">${stats.activeAgent}</span> ` :
+                    '';
+
+                this.dom.episodes.textContent = stats.totalEpisodes;
+                this.dom.demonstrations.textContent = activeAgent.demonstrations.length;
+
+                const epsilonPercent = Math.round(activeAgent.epsilon * 100);
+                this.dom.epsilon.textContent = epsilonPercent;
+
+                // Update Q-table size (show combined if split mode)
+                if (stats.splitMode) {
+                    this.dom.qtableSize.textContent = `${stats.totalQTable} (E:${stats.explorerQTable} C:${stats.collectorQTable})`;
+                } else {
+                    this.dom.qtableSize.textContent = stats.totalQTable;
+                }
+
+                // Update complexity display
+                if (this.complexity) {
+                    this.dom.complexity.textContent = this.complexity.score;
+
+                    if (this.complexity.recommendSplit) {
+                        this.dom.splitIndicator.innerHTML = `<span style="color: #ff0; font-weight: bold;">⚡ ${stats.activeAgent}</span>`;
+                        this.dom.splitIndicator.title = `Multi-agent mode! ${stats.activeAgent} is currently active. Explorer episodes: ${stats.explorerEpisodes}, Collector episodes: ${stats.collectorEpisodes}`;
+                    } else {
+                        this.dom.splitIndicator.innerHTML = '<span style="color: #0f0;">✓ Single</span>';
+                        this.dom.splitIndicator.title = `Complexity ${this.complexity.score} ≤ 40. Single agent (COLLECTOR) mode.`;
+                    }
+                }
+
+                // Use centralized AI mode determination with agent type prefix
+                const aiMode = activeAgent.getAIMode();
+                this.dom.aiMode.innerHTML = agentType + aiMode;
+
+                // Set mode-specific styling
+                if (aiMode === 'IMITATING') {
+                    this.dom.aiMode.className = 'ai-mode';
+                    this.dom.aiMode.style.background = '#0ff';
+                    this.dom.aiMode.style.color = '#000';
+                } else if (aiMode === 'EXPLORING') {
+                    this.dom.aiMode.className = 'ai-mode exploring';
+                } else if (aiMode === 'LEARNING') {
+                    this.dom.aiMode.className = 'ai-mode';
+                    this.dom.aiMode.style.background = '#c4f';
+                    this.dom.aiMode.style.color = '#fff';
+                } else {
+                    this.dom.aiMode.className = 'ai-mode exploiting';
+                }
+
+                const progress = Math.min(100, (stats.totalEpisodes / 50) * 100);
+                this.dom.aiProgress.style.width = progress + '%';
+            }
+
+            setupControls() {
+                window.addEventListener('keydown', (e) => {
+                    this.keys[e.key] = true;
+                    this.handlePlayerMove();
+                });
+
+                ['btnUp', 'btnDown', 'btnLeft', 'btnRight'].forEach(id => {
+                    const btn = document.getElementById(id);
+                    btn.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        const action = {
+                            'btnUp': 'ArrowUp',
+                            'btnDown': 'ArrowDown',
+                            'btnLeft': 'ArrowLeft',
+                            'btnRight': 'ArrowRight'
+                        }[id];
+                        this.keys[action] = true;
+                        this.handlePlayerMove();
+                    });
+                });
+            }
+
+            handlePlayerMove() {
+                if (this.player.reachedGoal) return;
+
+                let dx = 0, dy = 0, action = -1;
+                if (this.keys['ArrowUp']) { dy = -1; action = 0; }
+                else if (this.keys['ArrowDown']) { dy = 1; action = 1; }
+                else if (this.keys['ArrowLeft']) { dx = -1; action = 2; }
+                else if (this.keys['ArrowRight']) { dx = 1; action = 3; }
+
+                if (dx !== 0 || dy !== 0) {
+                    // Record state before move for AI learning
+                    const stateBefore = this.player.getState(this.maze);
+
+                    this.player.move(dx, dy, this.maze);
+                    this.dom.playerScore.textContent = this.player.score;
+
+                    // Record this move for AI to learn from (for both agents!)
+                    const activeAgent = this.coordinator.getActiveAgent();
+                    activeAgent.recordDemonstration(stateBefore, action);
+
+                    // If player reached goal, complete the demonstration
+                    if (this.player.reachedGoal) {
+                        activeAgent.completeDemonstration(true);
+                        this.showLearningMessage();
+
+                        // Speed up AI so player doesn't have to wait
+                        this.aiMoveInterval = this.fastAISpeed;
+                    }
+
+                    this.keys = {}; // Clear keys after move
+                    this.checkGameOver();
+                }
+            }
+
+            showLearningMessage() {
+                // Show visual feedback that AI learned
+                const activeAgent = this.coordinator.getActiveAgent();
+                const msg = document.createElement('div');
+                msg.style.position = 'absolute';
+                msg.style.top = '50%';
+                msg.style.left = '50%';
+                msg.style.transform = 'translate(-50%, -50%)';
+                msg.style.background = 'rgba(0, 255, 255, 0.95)';
+                msg.style.padding = '20px 30px';
+                msg.style.borderRadius = '10px';
+                msg.style.fontSize = '18px';
+                msg.style.fontWeight = 'bold';
+                msg.style.color = '#000';
+                msg.style.zIndex = '1000';
+                msg.style.animation = 'fadeOut 2s forwards';
+                msg.textContent = `✨ AI learned from your path! (${activeAgent.demonstrations.length} demonstrations)`;
+                document.body.appendChild(msg);
+
+                setTimeout(() => msg.remove(), 2000);
+
+                // Add CSS animation if not already present
+                if (!document.getElementById('fadeOutStyle')) {
+                    const style = document.createElement('style');
+                    style.id = 'fadeOutStyle';
+                    style.textContent = '@keyframes fadeOut { 0% { opacity: 1; } 50% { opacity: 1; } 100% { opacity: 0; } }';
+                    document.head.appendChild(style);
+                }
+            }
+
+            updateAI() {
+                if (this.ai.reachedGoal) return;
+
+                // Get active agent - both agents now use SAME state representation!
+                const activeAgent = this.coordinator.getActiveAgent();
+
+                // SHARED STATE: Both Explorer and Collector use same 11-feature state
+                // Differentiation happens via REWARDS in move(), not state representation
+                const state = this.ai.getState(this.maze);
+                const action = activeAgent.act(state);
+
+                const moves = [[0, -1], [0, 1], [-1, 0], [1, 0]]; // Up, Down, Left, Right
+                const [dx, dy] = moves[action];
+
+                // 🔥 MULTI-OBJECTIVE: Pass complexity for weighted rewards
+                // Explorer: Navigation-focused with gem awareness in complex mazes
+                // Collector: Gem-focused with navigation awareness in simple mazes
+                const complexityScore = this.coordinator.complexity.score;
+                const reward = this.ai.move(dx, dy, this.maze, activeAgent.agentType, complexityScore);
+
+                // Get next state (same representation for both agents)
+                const nextState = this.ai.getState(this.maze);
+                const done = this.ai.reachedGoal;
+
+                activeAgent.remember(state, action, reward, nextState, done);
+
+                // Track AI position for stuck detection
+                this.aiPositionHistory.push({ x: this.ai.x, y: this.ai.y });
+                if (this.aiPositionHistory.length > this.maxHistoryLength) {
+                    this.aiPositionHistory.shift();
+                }
+
+                // Check if AI is stuck (oscillating between two positions)
+                this.checkIfStuck();
+
+                // 🔥 DYNAMIC COMPLEXITY: Track exploration
+                this.exploredCells.add(`${this.ai.x},${this.ai.y}`);
+
+                if (done) {
+                    activeAgent.endEpisode();
+                    this.coordinator.recordSuccess();
+                    this.aiSuccesses++;
+                    this.aiAttempts++;
+
+                    // 🔥 DYNAMIC COMPLEXITY: Update complexity every 10 episodes
+                    this.complexityUpdateCounter++;
+                    if (this.complexityUpdateCounter >= 10) {
+                        const successRate = this.aiSuccesses / Math.max(this.aiAttempts, 1);
+                        this.coordinator.updateComplexity(
+                            this.maze,
+                            this.exploredCells.size,
+                            successRate
+                        );
+                        this.complexityUpdateCounter = 0;
+                    }
+
+                    // Check if we should switch agents based on learning progress
+                    const newAgent = this.coordinator.switchAgent();
+                    if (newAgent && newAgent !== activeAgent.agentType) {
+                        console.log(`🔄 Agent switched to ${newAgent}`);
+                    }
+                } else if (!done && reward < 0) {
+                    // Track failed attempts (hit wall, etc.)
+                    this.aiAttempts++;
+                }
+
+                this.dom.aiScore.textContent = this.ai.score;
+                this.updateAIDisplay();
+                this.checkGameOver();
+            }
+
+            checkIfStuck() {
+                if (this.aiPositionHistory.length < this.maxHistoryLength) return;
+
+                // Count unique positions in recent history
+                const positionCounts = {};
+                for (const pos of this.aiPositionHistory) {
+                    const key = `${pos.x},${pos.y}`;
+                    positionCounts[key] = (positionCounts[key] || 0) + 1;
+                }
+
+                const uniquePositions = Object.keys(positionCounts).length;
+
+                // If AI is only moving between 2 positions and one appears 6+ times = stuck
+                if (uniquePositions <= 2) {
+                    const maxCount = Math.max(...Object.values(positionCounts));
+                    if (maxCount >= this.stuckThreshold) {
+                        if (!this.isStuck) {
+                            this.isStuck = true;
+                            this.onAIStuck();
+                        }
+                    } else {
+                        // Was stuck but now moving more freely
+                        if (this.isStuck) {
+                            this.isStuck = false;
+                            this.onAIUnstuck();
+                        }
+                    }
+                } else {
+                    // AI is exploring different positions - definitely not stuck
+                    if (this.isStuck) {
+                        this.isStuck = false;
+                        this.onAIUnstuck();
+                    }
+                }
+            }
+
+            onAIUnstuck() {
+                console.log('AI unstuck! Continuing exploration.');
+                this.hideSkipButton();
+            }
+
+            onAIStuck() {
+                console.log('AI is stuck! Oscillating between positions.');
+
+                // Give AI negative feedback about being stuck
+                if (this.aiPositionHistory.length >= 2) {
+                    const activeAgent = this.coordinator.getActiveAgent();
+                    const state = this.ai.getState(this.maze); // Both agents use same state
+
+                    // Mark this pattern as bad
+                    activeAgent.remember(state, -1, -50, state, false); // Big negative reward
+                }
+
+                // Show skip button
+                this.showSkipButton();
+            }
+
+            showSkipButton() {
+                let skipBtn = document.getElementById('skipAIBtn');
+                if (!skipBtn) {
+                    skipBtn = document.createElement('button');
+                    skipBtn.id = 'skipAIBtn';
+                    skipBtn.innerHTML = '⚠️ AI Stuck<br><small style="font-size: 11px;">Click to Skip</small>';
+                    skipBtn.style.cssText = `
+                        position: absolute;
+                        bottom: 240px;
+                        right: 10px;
+                        background: rgba(255, 68, 68, 0.95);
+                        color: #fff;
+                        border: 2px solid #ff6666;
+                        padding: 10px 15px;
+                        font-size: 13px;
+                        font-weight: bold;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        z-index: 500;
+                        font-family: 'Courier New', monospace;
+                        box-shadow: 0 2px 8px rgba(255, 68, 68, 0.4);
+                        animation: gentlePulse 2s infinite;
+                        text-align: center;
+                        line-height: 1.3;
+                    `;
+                    skipBtn.onclick = () => this.skipAI();
+                    document.body.appendChild(skipBtn);
+
+                    // Add gentle pulse animation
+                    if (!document.getElementById('pulseStyle')) {
+                        const style = document.createElement('style');
+                        style.id = 'pulseStyle';
+                        style.textContent = '@keyframes gentlePulse { 0%, 100% { opacity: 0.9; box-shadow: 0 2px 8px rgba(255, 68, 68, 0.4); } 50% { opacity: 1; box-shadow: 0 2px 12px rgba(255, 68, 68, 0.6); } }';
+                        document.head.appendChild(style);
+                    }
+                }
+                skipBtn.style.display = 'block';
+            }
+
+            hideSkipButton() {
+                const skipBtn = document.getElementById('skipAIBtn');
+                if (skipBtn) {
+                    skipBtn.style.display = 'none';
+                }
+            }
+
+            skipAI() {
+                // Mark AI as "failed" this level
+                this.ai.reachedGoal = true; // Fake completion to trigger next level
+
+                // Don't give AI any episode credit for being stuck
+                console.log('Skipping stuck AI - no learning credit given');
+
+                this.hideSkipButton();
+                this.checkGameOver();
+            }
+
+            checkGameOver() {
+                if (this.player.reachedGoal && this.ai.reachedGoal) {
+                    this.endGame();
+                }
+            }
+
+            update() {
+                if (this.gameOver) return;
+
+                const now = Date.now();
+                if (now - this.lastMoveTime > this.aiMoveInterval) {
+                    this.updateAI();
+                    this.lastMoveTime = now;
+                }
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                this.maze.draw();
+                this.player.draw();
+                this.ai.draw();
+            }
+
+            gameLoop() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+
+            endGame() {
+                this.gameOver = true;
+
+                this.dom.finalPlayerScore.textContent = this.player.score;
+                this.dom.finalAiScore.textContent = this.ai.score;
+
+                // Update AI learning statistics (from coordinator)
+                const activeAgent = this.coordinator.getActiveAgent();
+                const stats = this.coordinator.getCombinedStats();
+
+                this.dom.finalDemonstrations.textContent = activeAgent.demonstrations.length;
+                this.dom.finalEpisodes.textContent = stats.totalEpisodes;
+                this.dom.finalEpsilon.textContent = Math.round(activeAgent.epsilon * 100);
+
+                // Show combined Q-table size if split mode
+                if (stats.splitMode) {
+                    this.dom.finalQTableSize.textContent = `${stats.totalQTable} (E:${stats.explorerQTable} C:${stats.collectorQTable})`;
+                } else {
+                    this.dom.finalQTableSize.textContent = stats.totalQTable;
+                }
+
+                // Use centralized AI mode determination with agent type
+                const agentPrefix = stats.splitMode ? `${stats.activeAgent} ` : '';
+                this.dom.finalAIMode.textContent = agentPrefix + activeAgent.getAIMode();
+
+                // Generate progress message
+                if (stats.totalEpisodes >= 50) {
+                    this.dom.aiProgressMessage.textContent = '🎓 AI has completed maximum training games!';
+                    this.dom.aiProgressMessage.style.color = '#0f0';
+                } else if (activeAgent.demonstrations.length === 0) {
+                    this.dom.aiProgressMessage.textContent = '💡 Teach the AI by showing it how to reach the goal!';
+                    this.dom.aiProgressMessage.style.color = '#ff0';
+                } else if (activeAgent.demonstrations.length < 5) {
+                    this.dom.aiProgressMessage.textContent = '📚 More demonstrations will help the AI learn faster!';
+                    this.dom.aiProgressMessage.style.color = '#0ff';
+                } else if (activeAgent.epsilon < 0.2) {
+                    this.dom.aiProgressMessage.textContent = '🌟 AI is getting smart! Keep training for mastery!';
+                    this.dom.aiProgressMessage.style.color = '#0f0';
+                } else {
+                    this.dom.aiProgressMessage.textContent = '📈 Good progress! AI is learning from your examples!';
+                    this.dom.aiProgressMessage.style.color = '#0ff';
+                }
+
+                if (this.player.score > this.ai.score) {
+                    this.dom.modalTitle.textContent = '🎉 YOU WIN!';
+                    this.dom.modalTitle.style.color = '#4af';
+                    this.dom.modalMessage.textContent = 'You collected more gems than the AI!';
+                } else if (this.ai.score > this.player.score) {
+                    this.dom.modalTitle.textContent = '🤖 AI WINS!';
+                    this.dom.modalTitle.style.color = '#0ff';
+                    this.dom.modalMessage.textContent = 'The AI outperformed you!';
+                } else {
+                    this.dom.modalTitle.textContent = '🤝 TIE!';
+                    this.dom.modalTitle.style.color = '#ff0';
+                    this.dom.modalMessage.textContent = 'Equal performance!';
+                }
+
+                this.dom.modal.style.display = 'block';
+            }
+
+            nextLevel() {
+                this.level++;
+                this.dom.modal.style.display = 'none';
+                this.init();
+            }
+
+            restart() {
+                this.level = 1;
+                this.coordinator = null; // Reset coordinator (will be recreated in init())
+                this.dom.modal.style.display = 'none';
+                this.init();
+            }
+
+            resetAI() {
+                if (confirm('Reset AI brain? This will erase all learned knowledge and start training from scratch.')) {
+                    this.coordinator.resetAll();
+                    this.updateAIDisplay();
+                    alert('AI brain reset! Both Explorer and Collector agents will start learning from zero.');
+                }
+            }
+
+            downloadLearningData() {
+                // Gather comprehensive learning data from multi-agent system
+                const stats = this.coordinator.getCombinedStats();
+                const activeAgent = this.coordinator.getActiveAgent();
+                const explorer = this.coordinator.explorer;
+                const collector = this.coordinator.collector;
+
+                const learningData = {
+                    metadata: {
+                        exportDate: new Date().toISOString(),
+                        gameVersion: '2.0-MultiAgent',
+                        level: this.level,
+                        multiAgentMode: stats.splitMode,
+                        activeAgent: stats.activeAgent,
+                        complexityScore: this.complexity.score
+                    },
+                    explorerAgent: {
+                        episodes: explorer.episodes,
+                        epsilon: explorer.epsilon,
+                        imitationWeight: explorer.imitationWeight,
+                        qTableSize: explorer.getQTableSize(),
+                        qTable: explorer.qTable,
+                        demonstrations: explorer.demonstrations.length,
+                        epsilonDecay: explorer.epsilonDecay
+                    },
+                    collectorAgent: {
+                        episodes: collector.episodes,
+                        epsilon: collector.epsilon,
+                        imitationWeight: collector.imitationWeight,
+                        qTableSize: collector.getQTableSize(),
+                        qTable: collector.qTable,
+                        demonstrations: collector.demonstrations.length,
+                        epsilonDecay: collector.epsilonDecay
+                    },
+                    combinedStats: {
+                        totalEpisodes: stats.totalEpisodes,
+                        totalQTableSize: stats.totalQTable,
+                        explorerSuccesses: this.coordinator.explorerSuccesses,
+                        collectorSuccesses: this.coordinator.collectorSuccesses
+                    },
+                    complexity: this.complexity,
+                    analysis: {
+                        explorerRandomness: Math.round(explorer.epsilon * 100),
+                        collectorRandomness: Math.round(collector.epsilon * 100),
+                        explorerLearningPhase: explorer.epsilon > 0.5 ? 'EXPLORING' : explorer.epsilon > 0.2 ? 'LEARNING' : 'SMART',
+                        collectorLearningPhase: collector.epsilon > 0.5 ? 'EXPLORING' : collector.epsilon > 0.2 ? 'LEARNING' : 'SMART'
+                    }
+                };
+
+                // Create downloadable JSON file
+                const dataStr = JSON.stringify(learningData, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `maze-multi-agent-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                console.log('Multi-agent learning data downloaded:', learningData);
+                const modeStr = stats.splitMode ? `MULTI-AGENT (${stats.activeAgent})` : 'SINGLE-AGENT';
+                alert(`Downloaded AI learning data!\n\n` +
+                      `🧠 Mode: ${modeStr}\n` +
+                      `📊 Stats:\n` +
+                      `- Total episodes: ${stats.totalEpisodes}\n` +
+                      `- Explorer: ${stats.explorerEpisodes} episodes, ${stats.explorerQTable} states\n` +
+                      `- Collector: ${stats.collectorEpisodes} episodes, ${stats.collectorQTable} states\n` +
+                      `- Complexity: ${this.complexity.score}/100\n\n` +
+                      `💡 Split mode ${stats.splitMode ? 'ACTIVE' : 'inactive'} (threshold: 40)`);
+            }
+        }
+
+        // Start game
+        const game = new Game();
+    </script>
+</body>
+</html>
