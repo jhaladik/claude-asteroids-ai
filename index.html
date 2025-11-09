@@ -1887,15 +1887,15 @@
                     }
                     this.aiAttempts++;
 
-                    // 🗺️ MEMORY MAP: Clear episode memory (new episode = fresh start)
-                    this.aiEpisodeVisitedCells.clear();
-                    this.aiEpisodeVisitedCells.set(`${this.ai.x},${this.ai.y}`, 1); // Mark starting pos
-                    this.aiStepCount = 0; // Reset step counter for new episode
-
-                    // Reset AI position for new episode
+                    // Reset AI position for new episode FIRST (before marking starting pos!)
                     this.ai.x = 1;
                     this.ai.y = 2;
                     this.ai.reachedGoal = false;
+
+                    // 🗺️ MEMORY MAP: Clear episode memory (new episode = fresh start)
+                    this.aiEpisodeVisitedCells.clear();
+                    this.aiEpisodeVisitedCells.set(`${this.ai.x},${this.ai.y}`, 1); // Mark starting pos (1,2)
+                    this.aiStepCount = 0; // Reset step counter for new episode
 
                     // 🔥 DYNAMIC COMPLEXITY: Update complexity every 10 episodes
                     this.complexityUpdateCounter++;
