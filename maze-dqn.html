@@ -1841,6 +1841,10 @@
                 const visitCount = this.aiEpisodeVisitedCells.get(cellKey) || 0;
                 this.aiEpisodeVisitedCells.set(cellKey, visitCount + 1);
 
+                // Initialize episode completion flags
+                let done = this.ai.reachedGoal;
+                let episodeTimedOut = false;
+
                 // 🔥 EXPONENTIAL PENALTY: Grows much faster than linear to break extreme loops
                 // Linear (old): -3, -6, -9, -12, -15...
                 // Exponential (new): -3, -8, -16, -27, -42, -60, -82, -107...
@@ -1853,11 +1857,18 @@
                     }
                 }
 
+                // 🚨 EXTREME LOOP PREVENTION: Force episode end if revisiting same cell too many times
+                // Even with exponential penalty, AI can get stuck in dead-ends where all paths are bad
+                // Terminate episode and start fresh rather than spinning in circles 50+ times
+                if (visitCount >= 15) {
+                    done = true;
+                    episodeTimedOut = true;
+                    reward -= 100; // Heavy penalty for extreme looping
+                    console.log(`🚨 EXTREME LOOP DETECTED! Cell ${cellKey} visited ${visitCount + 1} times. Forcing episode reset.`);
+                }
+
                 // ⏱️ EPISODE TIMEOUT: Prevent infinite wandering
                 // Force episode end after 300 steps to prevent 500+ move episodes
-                let done = this.ai.reachedGoal;
-                let episodeTimedOut = false;
-
                 if (!done && this.aiStepCount >= 300) {
                     done = true; // Force episode completion
                     episodeTimedOut = true;
@@ -1897,27 +1908,32 @@
                     }
                     this.aiAttempts++;
 
-                    // 🎯 GAME COMPLETION: If player already finished, DON'T reset AI episode
-                    // Let checkGameOver() detect both reached goal and end the game
-                    if (!this.player.reachedGoal) {
-                        // Reset AI position for new episode FIRST (before marking starting pos!)
+                    // 🎯 GAME COMPLETION LOGIC:
+                    // - If AI succeeded (reached goal): DON'T reset, wait for player to finish
+                    // - If AI timed out AND player finished: End game immediately
+                    // - If AI timed out AND player NOT finished: Reset AI for new training episode
+
+                    if (!episodeTimedOut && this.ai.reachedGoal) {
+                        // AI successfully reached goal - wait for player to finish
+                        // DON'T reset ai.reachedGoal - let checkGameOver() detect completion
+                        console.log('✅ AI completed! Waiting for player to finish...');
+                    } else if (episodeTimedOut && this.player.reachedGoal) {
+                        // Player finished, AI timed out - end game with timeout status
+                        console.log('⏱️ AI timed out while player already finished. Ending game now.');
+                        this.aiTimedOut = true;
+                        this.endGame();
+                        return;
+                    } else {
+                        // AI timed out, player still playing - reset AI for new training episode
+                        console.log('🔄 AI timed out. Starting new training episode...');
                         this.ai.x = 1;
                         this.ai.y = 2;
                         this.ai.reachedGoal = false;
 
                         // 🗺️ MEMORY MAP: Clear episode memory (new episode = fresh start)
                         this.aiEpisodeVisitedCells.clear();
-                        this.aiEpisodeVisitedCells.set(`${this.ai.x},${this.ai.y}`, 1); // Mark starting pos (1,2)
-                        this.aiStepCount = 0; // Reset step counter for new episode
-                    } else {
-                        // 🐛 BUG FIX: If player finished and AI timed out, end game directly
-                        // DON'T set ai.reachedGoal = true (that would falsely mark it as success!)
-                        if (episodeTimedOut) {
-                            console.log('⏱️ AI timed out while waiting for game end. Ending game now.');
-                            this.aiTimedOut = true; // Mark that AI failed to complete
-                            this.endGame();
-                            return; // Stop further processing
-                        }
+                        this.aiEpisodeVisitedCells.set(`${this.ai.x},${this.ai.y}`, 1);
+                        this.aiStepCount = 0;
                     }
 
                     // 🔥 DYNAMIC COMPLEXITY: Update complexity every 10 episodes
