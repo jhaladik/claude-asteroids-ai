@@ -293,6 +293,10 @@
                 <div class="player-stat">👤 YOU: <span id="playerScore">0</span></div>
                 <div class="ai-stat">🤖 AI: <span id="aiScore">0</span></div>
             </div>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #888; margin-top: 3px;">
+                <div class="player-stat">⏱️ Steps: <span id="playerSteps">0</span></div>
+                <div class="ai-stat">⏱️ Steps: <span id="aiSteps">0</span></div>
+            </div>
             <div style="margin-top: 8px; text-align: center;">Level: <span id="level">1</span></div>
 
             <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">
@@ -1231,7 +1235,7 @@
                 this.reachedGoal = false;
             }
 
-            move(dx, dy, maze, agentType = 'COLLECTOR', complexityScore = 40) {
+            move(dx, dy, maze, agentType = 'COLLECTOR', complexityScore = 40, stepCount = 0) {
                 const newX = this.x + dx;
                 const newY = this.y + dy;
 
@@ -1265,6 +1269,13 @@
                     const navigationReward = reachedGoal ? 100 : (madeProgress ? 1 : -1);
                     const gemReward = collectedGem ? 50 : 0;
 
+                    // ⏱️ TIME-BASED PENALTY: Scales with complexity
+                    // Simple mazes (complexity 20): -0.01 per step
+                    // Complex mazes (complexity 80): -0.03 per step
+                    // This encourages faster completion without dominating other rewards
+                    const timePressure = 0.01 + (complexityFactor * 0.02); // 0.01 to 0.03
+                    const timePenalty = -timePressure * stepCount;
+
                     // AGENT-SPECIFIC WEIGHTING (still specialized, but with blending)
                     if (agentType === 'EXPLORER') {
                         // EXPLORER: Prioritize navigation, but value gems more in complex mazes
@@ -1274,9 +1285,11 @@
                         const gemWeight = 0.05 + (complexityFactor * 0.15);
 
                         const blendedReward = (navigationReward * navWeight) + (gemReward * gemWeight);
-                        return blendedReward;
 
-                    } else {
+                        // ⏱️ Apply time penalty (DQN learns to move efficiently)
+                        return blendedReward + timePenalty;
+
+                    } else if (agentType === 'COLLECTOR') {
                         // COLLECTOR: Prioritize gems, but value navigation more in simple mazes
                         // Simple maze: 60% gems, 40% navigation
                         // Complex maze: 80% gems, 20% navigation
@@ -1286,7 +1299,12 @@
                         const blendedReward = (gemReward * gemWeight) + (navigationReward * navWeight);
 
                         // Add small progress bonus for Collector
-                        return blendedReward + (madeProgress ? 0.5 : 0);
+                        // ⏱️ Apply time penalty (DQN learns to move efficiently)
+                        return blendedReward + (madeProgress ? 0.5 : 0) + timePenalty;
+                    } else {
+                        // PLAYER: No time penalty for human player, just score updates
+                        const blendedReward = navigationReward + gemReward;
+                        return blendedReward;
                     }
                 }
 
@@ -1375,6 +1393,8 @@
                 this.dom = {
                     playerScore: document.getElementById('playerScore'),
                     aiScore: document.getElementById('aiScore'),
+                    playerSteps: document.getElementById('playerSteps'),
+                    aiSteps: document.getElementById('aiSteps'),
                     level: document.getElementById('level'),
                     episodes: document.getElementById('episodes'),
                     demonstrations: document.getElementById('demonstrations'),
@@ -1415,6 +1435,10 @@
                 this.aiAttempts = 0;
                 this.complexityUpdateCounter = 0;
 
+                // ⏱️ TIME TRACKING: Step counters for time-based rewards
+                this.playerStepCount = 0;
+                this.aiStepCount = 0;
+
                 // Calculate environment complexity
                 this.complexity = this.maze.calculateComplexity();
                 console.log('Environment complexity:', this.complexity);
@@ -1445,6 +1469,8 @@
 
                 this.dom.playerScore.textContent = this.player.score;
                 this.dom.aiScore.textContent = this.ai.score;
+                this.dom.playerSteps.textContent = this.playerStepCount;
+                this.dom.aiSteps.textContent = this.aiStepCount;
                 this.dom.level.textContent = this.level;
 
                 // Update AI stats display
@@ -1544,8 +1570,12 @@
                     // Record state before move for AI learning
                     const stateBefore = this.player.getState(this.maze);
 
-                    this.player.move(dx, dy, this.maze);
+                    // ⏱️ Increment player step counter
+                    this.playerStepCount++;
+
+                    this.player.move(dx, dy, this.maze, 'PLAYER', this.complexity.score, this.playerStepCount);
                     this.dom.playerScore.textContent = this.player.score;
+                    this.dom.playerSteps.textContent = this.playerStepCount;
 
                     // Record this move for AI to learn from (for both agents!)
                     const activeAgent = this.coordinator.getActiveAgent();
@@ -1609,11 +1639,15 @@
                 const moves = [[0, -1], [0, 1], [-1, 0], [1, 0]]; // Up, Down, Left, Right
                 const [dx, dy] = moves[action];
 
+                // ⏱️ Increment AI step counter
+                this.aiStepCount++;
+
                 // 🔥 MULTI-OBJECTIVE: Pass complexity for weighted rewards
+                // ⏱️ TIME-BASED: Pass step count for time penalty
                 // Explorer: Navigation-focused with gem awareness in complex mazes
                 // Collector: Gem-focused with navigation awareness in simple mazes
                 const complexityScore = this.coordinator.complexity.score;
-                const reward = this.ai.move(dx, dy, this.maze, activeAgent.agentType, complexityScore);
+                const reward = this.ai.move(dx, dy, this.maze, activeAgent.agentType, complexityScore, this.aiStepCount);
 
                 // Get next state (same representation for both agents)
                 const nextState = this.ai.getState(this.maze);
@@ -1662,6 +1696,7 @@
                 }
 
                 this.dom.aiScore.textContent = this.ai.score;
+                this.dom.aiSteps.textContent = this.aiStepCount;
                 this.updateAIDisplay();
                 this.checkGameOver();
             }
