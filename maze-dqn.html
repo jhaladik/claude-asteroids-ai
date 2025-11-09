@@ -435,6 +435,11 @@
                 // Simple Q-table instead of neural network (easier for browser)
                 this.qTable = {};
 
+                // 🌊 SPATIAL Q-DIFFUSION: Track which states occur at which positions
+                // Maps "x,y" -> Set of state keys at that position
+                // Enables spreading Q-values spatially like image diffusion
+                this.positionStateMap = {};
+
                 // Imitation Learning: Store successful human demonstrations
                 this.demonstrations = [];
                 this.currentDemonstration = [];
@@ -453,7 +458,9 @@
             getQValues(state) {
                 const key = this.getStateKey(state);
                 if (!this.qTable[key]) {
-                    this.qTable[key] = new Array(this.actionSize).fill(0);
+                    // 🎯 OPTIMISTIC INITIALIZATION: Start with +10 instead of 0
+                    // Encourages exploration of unknown states
+                    this.qTable[key] = new Array(this.actionSize).fill(10);
                 }
                 return this.qTable[key];
             }
@@ -543,7 +550,8 @@
 
                     const stateKey = this.getStateKey(state);
                     if (!this.qTable[stateKey]) {
-                        this.qTable[stateKey] = new Array(this.actionSize).fill(0);
+                        // 🎯 OPTIMISTIC INITIALIZATION: Start with +10 instead of 0
+                        this.qTable[stateKey] = new Array(this.actionSize).fill(10);
                     }
 
                     const nextQValues = this.getQValues(nextState);
@@ -555,10 +563,20 @@
                 }
             }
 
-            remember(state, action, reward, nextState, done) {
+            remember(state, action, reward, nextState, done, position = null) {
                 this.memory.push({ state, action, reward, nextState, done });
                 if (this.memory.length > this.maxMemory) {
                     this.memory.shift();
+                }
+
+                // 🌊 SPATIAL Q-DIFFUSION: Track which states occur at which positions
+                if (position) {
+                    const posKey = `${position.x},${position.y}`;
+                    const stateKey = this.getStateKey(state);
+                    if (!this.positionStateMap[posKey]) {
+                        this.positionStateMap[posKey] = new Set();
+                    }
+                    this.positionStateMap[posKey].add(stateKey);
                 }
             }
 
@@ -574,7 +592,8 @@
                 for (const { state, action, reward, nextState, done } of batch) {
                     const stateKey = this.getStateKey(state);
                     if (!this.qTable[stateKey]) {
-                        this.qTable[stateKey] = new Array(this.actionSize).fill(0);
+                        // 🎯 OPTIMISTIC INITIALIZATION: Start with +10 instead of 0
+                        this.qTable[stateKey] = new Array(this.actionSize).fill(10);
                     }
 
                     let target = reward;
@@ -603,6 +622,83 @@
                 }
 
                 this.saveProgress();
+            }
+
+            // 🌊 SPATIAL Q-DIFFUSION: Spread Q-values to neighboring positions
+            // Like image generation diffusion, this adds "noise" (Q-knowledge) spatially
+            // Helps overcome initialization bias (Q=10 everywhere) by spreading learned values
+            spatialQDiffusion(maze, diffusionRate = 0.05) {
+                const newQTable = {};
+
+                // For each position that has been visited
+                for (const [posKey, stateKeys] of Object.entries(this.positionStateMap)) {
+                    const [x, y] = posKey.split(',').map(Number);
+
+                    // Get average Q-values at this position across all states
+                    const avgQValues = new Array(this.actionSize).fill(0);
+                    let stateCount = 0;
+
+                    for (const stateKey of stateKeys) {
+                        if (this.qTable[stateKey]) {
+                            for (let a = 0; a < this.actionSize; a++) {
+                                avgQValues[a] += this.qTable[stateKey][a];
+                            }
+                            stateCount++;
+                        }
+                    }
+
+                    if (stateCount === 0) continue;
+
+                    // Calculate average
+                    for (let a = 0; a < this.actionSize; a++) {
+                        avgQValues[a] /= stateCount;
+                    }
+
+                    // Spread to neighboring positions (up, down, left, right)
+                    const neighbors = [
+                        [x, y - 1], // Up (action 0)
+                        [x, y + 1], // Down (action 1)
+                        [x - 1, y], // Left (action 2)
+                        [x + 1, y]  // Right (action 3)
+                    ];
+
+                    for (let actionDir = 0; actionDir < neighbors.length; actionDir++) {
+                        const [nx, ny] = neighbors[actionDir];
+
+                        // Check if neighbor is valid (not a wall)
+                        if (!maze.isWall(nx, ny)) {
+                            const neighborPosKey = `${nx},${ny}`;
+                            const neighborStateKeys = this.positionStateMap[neighborPosKey];
+
+                            if (neighborStateKeys) {
+                                // Diffuse to neighbor states
+                                for (const neighborStateKey of neighborStateKeys) {
+                                    if (this.qTable[neighborStateKey]) {
+                                        // Blend current Q-value with neighbor's Q-values
+                                        for (let a = 0; a < this.actionSize; a++) {
+                                            const currentQ = this.qTable[neighborStateKey][a];
+                                            const diffusedQ = avgQValues[a];
+
+                                            // Store blended value (don't modify in-place to avoid order dependency)
+                                            if (!newQTable[neighborStateKey]) {
+                                                newQTable[neighborStateKey] = [...this.qTable[neighborStateKey]];
+                                            }
+                                            newQTable[neighborStateKey][a] =
+                                                (1 - diffusionRate) * currentQ + diffusionRate * diffusedQ;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Apply all diffused values at once (batch update)
+                for (const [stateKey, qValues] of Object.entries(newQTable)) {
+                    this.qTable[stateKey] = qValues;
+                }
+
+                console.log(`🌊 Spatial Q-diffusion: Updated ${Object.keys(newQTable).length} states`);
             }
 
             saveProgress() {
@@ -1762,7 +1858,8 @@
                 // Get next state (same representation for both agents)
                 const nextState = this.ai.getState(this.maze);
 
-                activeAgent.remember(state, action, reward, nextState, done);
+                // 🌊 SPATIAL Q-DIFFUSION: Pass position to track state-position mapping
+                activeAgent.remember(state, action, reward, nextState, done, { x: this.ai.x, y: this.ai.y });
 
                 // Track AI position for stuck detection
                 this.aiPositionHistory.push({ x: this.ai.x, y: this.ai.y });
@@ -1778,6 +1875,10 @@
 
                 if (done) {
                     activeAgent.endEpisode();
+
+                    // 🌊 SPATIAL Q-DIFFUSION: Spread learned Q-values to neighboring positions
+                    // Run every episode to help overcome initialization bias
+                    activeAgent.spatialQDiffusion(this.maze, 0.05);
 
                     // Only count as success if reached goal (not timeout)
                     if (!episodeTimedOut) {
