@@ -324,10 +324,10 @@
                     </div>
                 </div>
                 <div class="ai-learning">
-                    Training Games: <span id="episodes">0</span>/50
+                    Training Games: <span id="episodes">0</span>/50 <span id="episodesDetail" style="color: #888;">(0 attempts)</span>
                     <div class="tooltip">
                         <span class="info-icon">?</span>
-                        <span class="tooltiptext">Each time the AI reaches the goal flag 🏁, it completes one training game and learns from the experience. This counter shows how many times the AI has reached the goal (NOT how many gems collected).</span>
+                        <span class="tooltiptext">Successful goal completions / Total episodes attempted. AI learns from all attempts (including timeouts), but only successful completions count toward the 50-game limit. Epsilon (randomness) decreases with each attempt.</span>
                     </div>
                 </div>
                 <div class="ai-learning">
@@ -399,7 +399,7 @@
         <div style="margin: 20px 0; padding: 15px; background: rgba(0,255,255,0.1); border-radius: 8px; border: 1px solid rgba(0,255,255,0.3);">
             <div style="font-size: 14px; color: #0ff; margin-bottom: 10px; font-weight: bold;">📊 AI Learning Progress</div>
             <div style="font-size: 12px; margin: 5px 0;">👁️ Demonstrations Learned: <span id="finalDemonstrations">0</span>/10</div>
-            <div style="font-size: 12px; margin: 5px 0;">🎯 Training Games Completed: <span id="finalEpisodes">0</span>/50</div>
+            <div style="font-size: 12px; margin: 5px 0;">🎯 Training Games Completed: <span id="finalEpisodes">0</span>/50 <span id="finalEpisodesDetail" style="color: #888;">(0 attempts)</span></div>
             <div style="font-size: 12px; margin: 5px 0;">🎲 Randomness Level: <span id="finalEpsilon">100</span>%</div>
             <div style="font-size: 12px; margin: 5px 0;">🧠 AI Mode: <span id="finalAIMode">EXPLORING</span></div>
             <div style="font-size: 12px; margin: 5px 0;">📚 States Learned: <span id="finalQTableSize">0</span></div>
@@ -1572,6 +1572,7 @@
                     aiSteps: document.getElementById('aiSteps'),
                     level: document.getElementById('level'),
                     episodes: document.getElementById('episodes'),
+                    episodesDetail: document.getElementById('episodesDetail'),
                     demonstrations: document.getElementById('demonstrations'),
                     epsilon: document.getElementById('epsilon'),
                     qtableSize: document.getElementById('qtableSize'),
@@ -1586,6 +1587,7 @@
                     finalAiScore: document.getElementById('finalAiScore'),
                     finalDemonstrations: document.getElementById('finalDemonstrations'),
                     finalEpisodes: document.getElementById('finalEpisodes'),
+                    finalEpisodesDetail: document.getElementById('finalEpisodesDetail'),
                     finalEpsilon: document.getElementById('finalEpsilon'),
                     finalQTableSize: document.getElementById('finalQTableSize'),
                     finalAIMode: document.getElementById('finalAIMode'),
@@ -1667,6 +1669,7 @@
 
                 // 🎯 Show successful goal completions, not all episodes (which includes timeouts/failures)
                 this.dom.episodes.textContent = stats.totalSuccesses;
+                this.dom.episodesDetail.textContent = `(${stats.totalEpisodes} attempts)`;
                 this.dom.demonstrations.textContent = activeAgent.demonstrations.length;
 
                 const epsilonPercent = Math.round(activeAgent.epsilon * 100);
@@ -2161,6 +2164,7 @@
                 this.dom.finalDemonstrations.textContent = activeAgent.demonstrations.length;
                 // 🎯 Show successful completions, not all episodes
                 this.dom.finalEpisodes.textContent = stats.totalSuccesses;
+                this.dom.finalEpisodesDetail.textContent = `(${stats.totalEpisodes} attempts)`;
                 this.dom.finalEpsilon.textContent = Math.round(activeAgent.epsilon * 100);
 
                 // Show combined Q-table size if split mode
