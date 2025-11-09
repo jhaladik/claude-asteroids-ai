@@ -352,6 +352,9 @@
                     </div>
                 </div>
                 <div style="margin-top: 8px; text-align: center;">
+                    <button id="heatMapBtn" onclick="game.toggleHeatMap()" style="background: #0a0; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace; margin: 2px;">
+                        🗺️ Show Heat Map
+                    </button>
                     <button onclick="game.downloadLearningData()" style="background: #0a0; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: 'Courier New', monospace; margin: 2px;">
                         💾 Download Data
                     </button>
@@ -360,7 +363,7 @@
                     </button>
                     <div class="tooltip" style="display: inline;">
                         <span class="info-icon">?</span>
-                        <span class="tooltiptext">Download: Save AI learning data as JSON file for analysis. Reset: Clears all saved learning, AI starts from scratch.</span>
+                        <span class="tooltiptext">Heat Map: Shows AI's exploration pattern (blue=cold/new, yellow=warm, red=hot/looping). Download: Save AI learning data. Reset: Clear all learning.</span>
                     </div>
                 </div>
 
@@ -1459,6 +1462,9 @@
                 this.stuckThreshold = 6; // If 6 of last 10 moves alternate between 2 positions = stuck
                 this.isStuck = false;
 
+                // 🗺️ Heat map visualization toggle
+                this.showHeatMap = false;
+
                 // Cache frequently-used DOM elements
                 this.dom = {
                     playerScore: document.getElementById('playerScore'),
@@ -1929,8 +1935,73 @@
             draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 this.maze.draw();
+
+                // 🗺️ Draw heat map overlay (if enabled)
+                if (this.showHeatMap) {
+                    this.drawHeatMap();
+                }
+
                 this.player.draw();
                 this.ai.draw();
+            }
+
+            // 🗺️ Heat map visualization - shows AI's exploration pattern
+            drawHeatMap() {
+                if (!this.aiEpisodeVisitedCells) return;
+
+                // Find max visit count for normalization
+                let maxVisits = 1;
+                for (const visitCount of this.aiEpisodeVisitedCells.values()) {
+                    if (visitCount > maxVisits) maxVisits = visitCount;
+                }
+
+                // Draw heat overlay for each visited cell
+                for (const [cellKey, visitCount] of this.aiEpisodeVisitedCells) {
+                    const [x, y] = cellKey.split(',').map(Number);
+
+                    // Heat intensity: 0.0 (cool) to 1.0 (hot)
+                    const intensity = Math.min(visitCount / Math.max(maxVisits, 5), 1.0);
+
+                    // Color gradient: Blue (cold) → Yellow (warm) → Red (hot)
+                    let r, g, b;
+                    if (intensity < 0.5) {
+                        // Cold to warm: Blue → Yellow
+                        const t = intensity * 2; // 0 to 1
+                        r = Math.floor(255 * t);
+                        g = Math.floor(255 * t);
+                        b = Math.floor(255 * (1 - t));
+                    } else {
+                        // Warm to hot: Yellow → Red
+                        const t = (intensity - 0.5) * 2; // 0 to 1
+                        r = 255;
+                        g = Math.floor(255 * (1 - t));
+                        b = 0;
+                    }
+
+                    // Draw heat overlay with transparency
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.4 + intensity * 0.3})`;
+                    ctx.fillRect(x * config.cellSize, y * config.cellSize, config.cellSize, config.cellSize);
+
+                    // Draw visit count for hot cells (3+ visits)
+                    if (visitCount >= 3) {
+                        ctx.fillStyle = '#fff';
+                        ctx.font = 'bold 10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(visitCount,
+                            x * config.cellSize + config.cellSize / 2,
+                            y * config.cellSize + config.cellSize / 2);
+                    }
+                }
+            }
+
+            toggleHeatMap() {
+                this.showHeatMap = !this.showHeatMap;
+                const btn = document.getElementById('heatMapBtn');
+                if (btn) {
+                    btn.textContent = this.showHeatMap ? '🗺️ Hide Heat Map' : '🗺️ Show Heat Map';
+                    btn.style.background = this.showHeatMap ? '#f80' : '#0a0';
+                }
             }
 
             gameLoop() {
