@@ -1009,8 +1009,11 @@
             getCombinedStats() {
                 return {
                     totalEpisodes: this.explorer.episodes + this.collector.episodes,
+                    totalSuccesses: this.explorerSuccesses + this.collectorSuccesses, // 🎯 Successful goal reaches only
                     explorerEpisodes: this.explorer.episodes,
                     collectorEpisodes: this.collector.episodes,
+                    explorerSuccesses: this.explorerSuccesses,
+                    collectorSuccesses: this.collectorSuccesses,
                     explorerEpsilon: this.explorer.epsilon,
                     collectorEpsilon: this.collector.epsilon,
                     explorerQTable: this.explorer.getQTableSize(),
@@ -1662,7 +1665,8 @@
                     `<span style="color: ${stats.activeAgent === 'EXPLORER' ? '#ff0' : '#0f0'}; font-weight: bold;">${stats.activeAgent}</span> ` :
                     '';
 
-                this.dom.episodes.textContent = stats.totalEpisodes;
+                // 🎯 Show successful goal completions, not all episodes (which includes timeouts/failures)
+                this.dom.episodes.textContent = stats.totalSuccesses;
                 this.dom.demonstrations.textContent = activeAgent.demonstrations.length;
 
                 const epsilonPercent = Math.round(activeAgent.epsilon * 100);
@@ -2148,7 +2152,8 @@
                 const stats = this.coordinator.getCombinedStats();
 
                 this.dom.finalDemonstrations.textContent = activeAgent.demonstrations.length;
-                this.dom.finalEpisodes.textContent = stats.totalEpisodes;
+                // 🎯 Show successful completions, not all episodes
+                this.dom.finalEpisodes.textContent = stats.totalSuccesses;
                 this.dom.finalEpsilon.textContent = Math.round(activeAgent.epsilon * 100);
 
                 // Show combined Q-table size if split mode
@@ -2162,8 +2167,8 @@
                 const agentPrefix = stats.splitMode ? `${stats.activeAgent} ` : '';
                 this.dom.finalAIMode.textContent = agentPrefix + activeAgent.getAIMode();
 
-                // Generate progress message
-                if (stats.totalEpisodes >= 50) {
+                // Generate progress message based on successful completions
+                if (stats.totalSuccesses >= 50) {
                     this.dom.aiProgressMessage.textContent = '🎓 AI has completed maximum training games!';
                     this.dom.aiProgressMessage.style.color = '#0f0';
                 } else if (activeAgent.demonstrations.length === 0) {
