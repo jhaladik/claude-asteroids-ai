@@ -1735,19 +1735,32 @@
                 const visitCount = this.aiEpisodeVisitedCells.get(cellKey) || 0;
                 this.aiEpisodeVisitedCells.set(cellKey, visitCount + 1);
 
-                // Progressive penalty: -3 for 2nd visit, -6 for 3rd, -9 for 4th, etc.
+                // 🔥 EXPONENTIAL PENALTY: Grows much faster than linear to break extreme loops
+                // Linear (old): -3, -6, -9, -12, -15...
+                // Exponential (new): -3, -8, -16, -27, -42, -60, -82, -107...
                 if (visitCount > 0) {
-                    const loopPenalty = -3 * visitCount;
+                    const loopPenalty = -3 * Math.pow(visitCount, 1.5);
                     reward += loopPenalty;
-                    // Optional: Log when AI gets stuck in loops (for debugging)
-                    if (visitCount >= 3) {
-                        console.log(`⚠️ AI looping! Cell ${cellKey} visited ${visitCount + 1} times (penalty: ${loopPenalty})`);
+                    // Log severe loops (5+ visits)
+                    if (visitCount >= 5) {
+                        console.log(`🔥 AI severely looping! Cell ${cellKey} visited ${visitCount + 1} times (penalty: ${Math.round(loopPenalty)})`);
                     }
+                }
+
+                // ⏱️ EPISODE TIMEOUT: Prevent infinite wandering
+                // Force episode end after 300 steps to prevent 500+ move episodes
+                let done = this.ai.reachedGoal;
+                let episodeTimedOut = false;
+
+                if (!done && this.aiStepCount >= 300) {
+                    done = true; // Force episode completion
+                    episodeTimedOut = true;
+                    reward -= 50; // Penalty for timeout (didn't reach goal efficiently)
+                    console.log(`⏱️ Episode timeout at step ${this.aiStepCount}! Forcing reset with -50 penalty.`);
                 }
 
                 // Get next state (same representation for both agents)
                 const nextState = this.ai.getState(this.maze);
-                const done = this.ai.reachedGoal;
 
                 activeAgent.remember(state, action, reward, nextState, done);
 
@@ -1765,14 +1778,23 @@
 
                 if (done) {
                     activeAgent.endEpisode();
-                    this.coordinator.recordSuccess();
-                    this.aiSuccesses++;
+
+                    // Only count as success if reached goal (not timeout)
+                    if (!episodeTimedOut) {
+                        this.coordinator.recordSuccess();
+                        this.aiSuccesses++;
+                    }
                     this.aiAttempts++;
 
                     // 🗺️ MEMORY MAP: Clear episode memory (new episode = fresh start)
                     this.aiEpisodeVisitedCells.clear();
                     this.aiEpisodeVisitedCells.set(`${this.ai.x},${this.ai.y}`, 1); // Mark starting pos
                     this.aiStepCount = 0; // Reset step counter for new episode
+
+                    // Reset AI position for new episode
+                    this.ai.x = 1;
+                    this.ai.y = 2;
+                    this.ai.reachedGoal = false;
 
                     // 🔥 DYNAMIC COMPLEXITY: Update complexity every 10 episodes
                     this.complexityUpdateCounter++;
