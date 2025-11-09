@@ -395,6 +395,7 @@
         <div style="margin: 20px 0;">
             <div>Your Score: <span id="finalPlayerScore">0</span></div>
             <div>AI Score: <span id="finalAiScore">0</span></div>
+            <div id="aiCompletionStatus" style="margin-top: 10px; padding: 8px; border-radius: 5px; font-weight: bold;"></div>
         </div>
         <div style="margin: 20px 0; padding: 15px; background: rgba(0,255,255,0.1); border-radius: 8px; border: 1px solid rgba(0,255,255,0.3);">
             <div style="font-size: 14px; color: #0ff; margin-bottom: 10px; font-weight: bold;">📊 AI Learning Progress</div>
@@ -1585,6 +1586,7 @@
                     modalMessage: document.getElementById('modalMessage'),
                     finalPlayerScore: document.getElementById('finalPlayerScore'),
                     finalAiScore: document.getElementById('finalAiScore'),
+                    aiCompletionStatus: document.getElementById('aiCompletionStatus'),
                     finalDemonstrations: document.getElementById('finalDemonstrations'),
                     finalEpisodes: document.getElementById('finalEpisodes'),
                     finalEpisodesDetail: document.getElementById('finalEpisodesDetail'),
@@ -1604,6 +1606,7 @@
                 this.player = new Character(1, 1, '#4af', 'YOU');
                 this.ai = new Character(1, 2, '#0ff', 'AI');
                 this.gameOver = false;
+                this.aiTimedOut = false; // Track if AI failed to complete within 300 steps
 
                 // 🔥 DYNAMIC COMPLEXITY: Track exploration and performance
                 this.exploredCells = new Set();
@@ -1911,6 +1914,7 @@
                         // DON'T set ai.reachedGoal = true (that would falsely mark it as success!)
                         if (episodeTimedOut) {
                             console.log('⏱️ AI timed out while waiting for game end. Ending game now.');
+                            this.aiTimedOut = true; // Mark that AI failed to complete
                             this.endGame();
                             return; // Stop further processing
                         }
@@ -2157,6 +2161,24 @@
 
                 this.dom.finalPlayerScore.textContent = this.player.score;
                 this.dom.finalAiScore.textContent = this.ai.score;
+
+                // Show AI completion status
+                if (this.aiTimedOut) {
+                    this.dom.aiCompletionStatus.textContent = '⏱️ AI TIMED OUT - Failed to complete within 300 steps';
+                    this.dom.aiCompletionStatus.style.background = 'rgba(255, 100, 0, 0.2)';
+                    this.dom.aiCompletionStatus.style.border = '2px solid rgba(255, 100, 0, 0.6)';
+                    this.dom.aiCompletionStatus.style.color = '#ff6400';
+                } else if (this.ai.reachedGoal) {
+                    this.dom.aiCompletionStatus.textContent = '✅ AI COMPLETED - Reached the goal!';
+                    this.dom.aiCompletionStatus.style.background = 'rgba(0, 255, 0, 0.2)';
+                    this.dom.aiCompletionStatus.style.border = '2px solid rgba(0, 255, 0, 0.6)';
+                    this.dom.aiCompletionStatus.style.color = '#0f0';
+                } else {
+                    this.dom.aiCompletionStatus.textContent = '❌ AI DID NOT COMPLETE';
+                    this.dom.aiCompletionStatus.style.background = 'rgba(255, 0, 0, 0.2)';
+                    this.dom.aiCompletionStatus.style.border = '2px solid rgba(255, 0, 0, 0.6)';
+                    this.dom.aiCompletionStatus.style.color = '#f00';
+                }
 
                 // Update AI learning statistics (from coordinator)
                 const activeAgent = this.coordinator.getActiveAgent();
