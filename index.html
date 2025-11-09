@@ -244,6 +244,31 @@
             opacity: 1;
         }
 
+        .version-info {
+            font-size: 9px;
+            color: #666;
+            text-align: center;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #333;
+            font-family: monospace;
+        }
+
+        .version-info .version-number {
+            color: #0ff;
+            font-weight: bold;
+        }
+
+        .version-info .feature-tag {
+            display: inline-block;
+            background: #2a2a4a;
+            color: #0f0;
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-size: 8px;
+            margin: 2px 1px;
+        }
+
         @media (max-width: 600px) {
             #ui {
                 font-size: 11px;
@@ -323,6 +348,16 @@
                     <div class="tooltip" style="display: inline;">
                         <span class="info-icon">?</span>
                         <span class="tooltiptext">Download: Save AI learning data as JSON file for analysis. Reset: Clears all saved learning, AI starts from scratch.</span>
+                    </div>
+                </div>
+
+                <!-- Version Information -->
+                <div class="version-info">
+                    <div><span class="version-number">v2.0-complexity</span> | <span id="buildDate">2025-01-09</span></div>
+                    <div style="margin-top: 4px;">
+                        <span class="feature-tag">ADAPTIVE-HP</span>
+                        <span class="feature-tag">DYNAMIC-COMPLEXITY</span>
+                        <span class="feature-tag">MULTI-OBJECTIVE</span>
                     </div>
                 </div>
             </div>
@@ -944,6 +979,36 @@
             cellSize: 30,
             fps: 10
         };
+
+        // Version Information
+        const VERSION = {
+            number: 'v2.0-complexity',
+            date: '2025-01-09',
+            features: [
+                'Adaptive Hyperparameters (complexity-based)',
+                'Dynamic Complexity Recalculation (runtime)',
+                'Multi-Objective Reward Weighting',
+                'Multi-Agent System (Explorer + Collector)',
+                'Knowledge Transfer (Q-table sharing)',
+                'Imitation Learning (player demonstrations)'
+            ],
+            changelog: 'Complexity-aware multi-agent learning system with adaptive parameters'
+        };
+
+        // Log version info on startup
+        console.log('%c🎮 MAZE RUNNER DQN AI %c' + VERSION.number,
+            'background: #1a1a2e; color: #0ff; font-size: 16px; font-weight: bold; padding: 5px;',
+            'background: #1a1a2e; color: #ff0; font-size: 14px; padding: 5px;'
+        );
+        console.log('%cBuild Date: ' + VERSION.date, 'color: #666; font-style: italic;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #333;');
+        console.log('%c✨ Features in this build:', 'color: #0f0; font-weight: bold;');
+        VERSION.features.forEach((feature, i) => {
+            console.log(`  ${i + 1}. ${feature}`);
+        });
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #333;');
+        console.log('%c' + VERSION.changelog, 'color: #f0f; font-style: italic;');
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n', 'color: #333;');
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
