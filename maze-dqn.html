@@ -582,11 +582,27 @@
             }
 
             replay(batchSize = 32) {
-                if (this.memory.length < batchSize) return;
+                // 🎯 FIX #1: Adaptive batch size - work with whatever memory we have
+                // Old: Required 32+ experiences, blocked early learning
+                // New: Use all available experiences if less than batch size
+                if (this.memory.length === 0) return;
 
+                const actualBatchSize = Math.min(batchSize, this.memory.length);
                 const batch = [];
-                for (let i = 0; i < batchSize; i++) {
-                    const idx = Math.floor(Math.random() * this.memory.length);
+
+                // 🎯 FIX #3: Prioritized sampling - recent experiences first
+                // Recent experiences include loop failures and current behavior
+                // Sample from last 50% of memory more often
+                const recentThreshold = Math.floor(this.memory.length * 0.5);
+
+                for (let i = 0; i < actualBatchSize; i++) {
+                    let idx;
+                    // 70% chance to sample from recent half, 30% from older half
+                    if (Math.random() < 0.7 && this.memory.length > 10) {
+                        idx = recentThreshold + Math.floor(Math.random() * (this.memory.length - recentThreshold));
+                    } else {
+                        idx = Math.floor(Math.random() * this.memory.length);
+                    }
                     batch.push(this.memory[idx]);
                 }
 
@@ -603,9 +619,13 @@
                         target += this.gamma * Math.max(...nextQValues);
                     }
 
-                    // Q-learning update
+                    // 🎯 FIX #2: Increased learning rate for meaningful updates
+                    // Old: 0.001 (1000 updates to learn)
+                    // New: 0.1 (10 updates to learn significantly)
+                    // Extreme penalty -275 now creates immediate impact
+                    const learningRate = 0.1;
                     this.qTable[stateKey][action] +=
-                        this.learningRate * (target - this.qTable[stateKey][action]);
+                        learningRate * (target - this.qTable[stateKey][action]);
                 }
 
                 if (this.epsilon > this.epsilonMin) {
@@ -783,9 +803,8 @@
                 // Simple maze (20): 0.95, Complex maze (80): 0.97
                 this.epsilonDecay = 0.95 + (complexityFactor * 0.02);
 
-                // Learning rate: slower in complex mazes (more careful learning)
-                // Simple: 0.0015, Complex: 0.0005
-                this.learningRate = 0.0015 - (complexityFactor * 0.001);
+                // Learning rate: REMOVED - now fixed at 0.1 in replay() for faster learning
+                // Old: 0.0015 - (complexityFactor * 0.001) was too slow (1000+ updates needed)
 
                 // Gamma: higher in complex mazes (longer-term planning)
                 // Simple: 0.98, Complex: 0.99
@@ -793,7 +812,7 @@
 
                 console.log(`🎯 Explorer adapted to complexity ${complexityScore}:`, {
                     epsilonDecay: this.epsilonDecay.toFixed(4),
-                    learningRate: this.learningRate.toFixed(4),
+                    learningRate: '0.1 (fixed)',
                     gamma: this.gamma.toFixed(3)
                 });
             }
@@ -853,9 +872,8 @@
                 // Simple maze (20): 0.98, Complex maze (80): 0.99
                 this.epsilonDecay = 0.98 + (complexityFactor * 0.01);
 
-                // Learning rate: slower in complex mazes
-                // Simple: 0.0012, Complex: 0.0006
-                this.learningRate = 0.0012 - (complexityFactor * 0.0006);
+                // Learning rate: REMOVED - now fixed at 0.1 in replay() for faster learning
+                // Old: 0.0012 - (complexityFactor * 0.0006) was too slow (1000+ updates needed)
 
                 // Gamma: balanced for gem collection
                 // Simple: 0.95, Complex: 0.97
@@ -863,7 +881,7 @@
 
                 console.log(`💎 Collector adapted to complexity ${complexityScore}:`, {
                     epsilonDecay: this.epsilonDecay.toFixed(4),
-                    learningRate: this.learningRate.toFixed(4),
+                    learningRate: '0.1 (fixed)',
                     gamma: this.gamma.toFixed(3)
                 });
             }
