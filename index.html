@@ -299,6 +299,15 @@
             </div>
             <div style="margin-top: 8px; text-align: center;">Level: <span id="level">1</span></div>
 
+            <!-- Gem Legend -->
+            <div style="margin-top: 8px; padding: 5px; background: rgba(0,0,0,0.5); border-radius: 4px; font-size: 10px;">
+                <div style="display: flex; justify-content: space-around; align-items: center;">
+                    <div style="color: #0f0;">🟢 Good +10</div>
+                    <div style="color: #f00;">🔴 Bad -20</div>
+                    <div style="color: #0ff;">🏁 Goal</div>
+                </div>
+            </div>
+
             <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">
                 <div class="ai-learning" style="margin-bottom: 5px;">
                     🧠 AI Training
@@ -659,11 +668,11 @@
         }
 
         // ExplorerAgent: Specialized for FAST navigation to goal
-        // Uses SAME 11-feature state as Collector (enables knowledge transfer!)
+        // Uses SAME 15-feature state as Collector (enables knowledge transfer!)
         // Differentiation happens via REWARDS, not state representation
         class ExplorerAgent extends DQNAgent {
             constructor(complexityScore = 40) {
-                super(11, 4); // SAME 11-feature state as Collector (knowledge transfer compatible!)
+                super(15, 4); // SAME 15-feature state as Collector (includes red gem detection!)
                 this.agentType = 'EXPLORER';
 
                 // 🔥 ADAPTIVE HYPERPARAMETERS based on complexity
@@ -734,7 +743,7 @@
         // CollectorAgent: Specialized for gem collection optimization
         class CollectorAgent extends DQNAgent {
             constructor(complexityScore = 40) {
-                super(11, 4); // Full state: 11 features (includes gems), 4 actions
+                super(15, 4); // Full state: 15 features (good gems + bad gems detection), 4 actions
                 this.agentType = 'COLLECTOR';
 
                 // 🔥 ADAPTIVE HYPERPARAMETERS based on complexity
@@ -1055,16 +1064,21 @@
                     }
                 }
 
-                // Add some random walls and gems
+                // Add some random walls, good gems (green), and bad gems (red)
+                // Cell types: 0=empty, 1=wall, 2=good gem, 3=goal, 4=bad gem (red)
                 for (let i = 0; i < this.size * 2; i++) {
                     const x = Math.floor(Math.random() * (this.size - 2)) + 1;
                     const y = Math.floor(Math.random() * (this.size - 2)) + 1;
 
-                    if (Math.random() > 0.5) {
-                        this.grid[y][x] = 1; // Wall
-                    } else {
-                        this.grid[y][x] = 2; // Gem
+                    const rand = Math.random();
+                    if (rand > 0.7) {
+                        this.grid[y][x] = 1; // Wall (30%)
+                    } else if (rand > 0.4) {
+                        this.grid[y][x] = 2; // Good gem (30%)
+                    } else if (rand > 0.2) {
+                        this.grid[y][x] = 4; // Bad gem - RED (20%)
                     }
+                    // else: 20% stay empty
                 }
 
                 // Clear starting positions
@@ -1083,7 +1097,12 @@
 
             isGem(x, y) {
                 if (x < 0 || x >= this.size || y < 0 || y >= this.size) return false;
-                return this.grid[y][x] === 2;
+                return this.grid[y][x] === 2; // Good gem (green)
+            }
+
+            isRedGem(x, y) {
+                if (x < 0 || x >= this.size || y < 0 || y >= this.size) return false;
+                return this.grid[y][x] === 4; // Bad gem (red)
             }
 
             isGoal(x, y) {
@@ -1099,9 +1118,18 @@
                 return false;
             }
 
+            collectRedGem(x, y) {
+                if (this.isRedGem(x, y)) {
+                    this.grid[y][x] = 0;
+                    return true;
+                }
+                return false;
+            }
+
             // Calculate environment complexity to determine if AI should split attention
             calculateComplexity() {
                 let gemCount = 0;
+                let redGemCount = 0;
                 let wallCount = 0;
                 let emptyCount = 0;
 
@@ -1110,6 +1138,7 @@
                         const cell = this.grid[y][x];
                         if (cell === 1) wallCount++;
                         else if (cell === 2) gemCount++;
+                        else if (cell === 4) redGemCount++;
                         else if (cell === 0) emptyCount++;
                     }
                 }
@@ -1119,9 +1148,10 @@
                 const gemDensity = gemCount / totalCells;
 
                 // Complexity score (0-100)
-                // High complexity = many gems + high wall density + large maze
+                // High complexity = many gems + red gems (require discrimination) + walls + large maze
                 const complexityScore = (
-                    (gemCount * 5) +                    // More gems = more complexity (0-50 points)
+                    (gemCount * 5) +                    // More good gems = more complexity (0-50 points)
+                    (redGemCount * 7) +                 // Red gems = even more complex (need to avoid!)
                     (wallDensity * 30) +                // More walls = harder navigation (0-30 points)
                     (this.size / 15 * 20)               // Bigger maze = more complex (0-20 points)
                 );
@@ -1129,6 +1159,7 @@
                 return {
                     score: Math.min(Math.round(complexityScore), 100),
                     gemCount,
+                    redGemCount,
                     wallCount,
                     wallDensity: Math.round(wallDensity * 100),
                     gemDensity: Math.round(gemDensity * 100),
@@ -1196,10 +1227,14 @@
                                 ctx.strokeStyle = '#1a1f3a';
                                 ctx.strokeRect(px, py, config.cellSize, config.cellSize);
                                 break;
-                            case 2: // Gem
+                            case 2: // Good Gem (Green/Gold)
                                 ctx.fillStyle = '#0f0f1e';
                                 ctx.fillRect(px, py, config.cellSize, config.cellSize);
-                                ctx.fillStyle = '#ffd700';
+                                ctx.fillStyle = '#0f0';  // Green glow
+                                ctx.globalAlpha = 0.3;
+                                ctx.fillRect(px, py, config.cellSize, config.cellSize);
+                                ctx.globalAlpha = 1.0;
+                                ctx.fillStyle = '#ffd700';  // Gold center
                                 ctx.beginPath();
                                 ctx.arc(px + config.cellSize/2, py + config.cellSize/2,
                                        config.cellSize/4, 0, Math.PI * 2);
@@ -1213,6 +1248,28 @@
                                 ctx.textAlign = 'center';
                                 ctx.textBaseline = 'middle';
                                 ctx.fillText('🏁', px + config.cellSize/2, py + config.cellSize/2);
+                                break;
+                            case 4: // Bad Gem (RED) 💀
+                                ctx.fillStyle = '#0f0f1e';
+                                ctx.fillRect(px, py, config.cellSize, config.cellSize);
+                                ctx.fillStyle = '#f00';  // Red glow
+                                ctx.globalAlpha = 0.4;
+                                ctx.fillRect(px, py, config.cellSize, config.cellSize);
+                                ctx.globalAlpha = 1.0;
+                                ctx.fillStyle = '#ff0000';  // Red center
+                                ctx.beginPath();
+                                ctx.arc(px + config.cellSize/2, py + config.cellSize/2,
+                                       config.cellSize/4, 0, Math.PI * 2);
+                                ctx.fill();
+                                // Add warning X
+                                ctx.strokeStyle = '#fff';
+                                ctx.lineWidth = 2;
+                                ctx.beginPath();
+                                ctx.moveTo(px + config.cellSize/3, py + config.cellSize/3);
+                                ctx.lineTo(px + 2*config.cellSize/3, py + 2*config.cellSize/3);
+                                ctx.moveTo(px + 2*config.cellSize/3, py + config.cellSize/3);
+                                ctx.lineTo(px + config.cellSize/3, py + 2*config.cellSize/3);
+                                ctx.stroke();
                                 break;
                             default: // Empty
                                 ctx.fillStyle = '#0f0f1e';
@@ -1249,10 +1306,16 @@
                     const newDistance = Math.abs(this.x - (maze.size - 2)) + Math.abs(this.y - (maze.size - 2));
                     const madeProgress = newDistance < oldDistance;
 
-                    // Check for gem collection
+                    // Check for GOOD gem collection (green/gold)
                     const collectedGem = maze.collectGem(newX, newY);
                     if (collectedGem) {
                         this.score += 10;
+                    }
+
+                    // 🔴 Check for BAD gem collection (red) - PENALTY!
+                    const collectedRedGem = maze.collectRedGem(newX, newY);
+                    if (collectedRedGem) {
+                        this.score -= 20; // Lose 20 points!
                     }
 
                     // Check for goal
@@ -1268,6 +1331,7 @@
                     // Define base reward components
                     const navigationReward = reachedGoal ? 100 : (madeProgress ? 1 : -1);
                     const gemReward = collectedGem ? 50 : 0;
+                    const redGemPenalty = collectedRedGem ? -30 : 0; // 🔴 STRONG negative reward!
 
                     // ⏱️ TIME-BASED PENALTY: Scales with complexity
                     // Simple mazes (complexity 20): -0.01 per step
@@ -1286,8 +1350,8 @@
 
                         const blendedReward = (navigationReward * navWeight) + (gemReward * gemWeight);
 
-                        // ⏱️ Apply time penalty (DQN learns to move efficiently)
-                        return blendedReward + timePenalty;
+                        // ⏱️ Apply time penalty + red gem penalty (DQN learns to avoid red gems!)
+                        return blendedReward + timePenalty + redGemPenalty;
 
                     } else if (agentType === 'COLLECTOR') {
                         // COLLECTOR: Prioritize gems, but value navigation more in simple mazes
@@ -1299,11 +1363,11 @@
                         const blendedReward = (gemReward * gemWeight) + (navigationReward * navWeight);
 
                         // Add small progress bonus for Collector
-                        // ⏱️ Apply time penalty (DQN learns to move efficiently)
-                        return blendedReward + (madeProgress ? 0.5 : 0) + timePenalty;
+                        // ⏱️ Apply time penalty + red gem penalty (DQN learns to avoid red gems!)
+                        return blendedReward + (madeProgress ? 0.5 : 0) + timePenalty + redGemPenalty;
                     } else {
                         // PLAYER: No time penalty for human player, just score updates
-                        const blendedReward = navigationReward + gemReward;
+                        const blendedReward = navigationReward + gemReward + redGemPenalty;
                         return blendedReward;
                     }
                 }
@@ -1323,23 +1387,29 @@
                 const directionY = this.y < goalY ? 1 : (this.y > goalY ? -1 : 0); // -1=north, 0=at goal, 1=south
 
                 const state = [
-                    // Direction to goal (only 9 combinations instead of 225!)
+                    // 1-2: Direction to goal (9 combinations)
                     directionX,  // Goal is left(-1), here(0), or right(1)
                     directionY,  // Goal is up(-1), here(0), or down(1)
 
-                    // Local walls (transferable pattern!)
+                    // 3-6: Local walls (2^4 = 16 combinations)
                     maze.isWall(this.x, this.y - 1) ? 1 : 0, // Wall up?
                     maze.isWall(this.x, this.y + 1) ? 1 : 0, // Wall down?
                     maze.isWall(this.x - 1, this.y) ? 1 : 0, // Wall left?
                     maze.isWall(this.x + 1, this.y) ? 1 : 0, // Wall right?
 
-                    // Local gems (transferable pattern!)
-                    maze.isGem(this.x, this.y - 1) ? 1 : 0, // Gem up?
-                    maze.isGem(this.x, this.y + 1) ? 1 : 0, // Gem down?
-                    maze.isGem(this.x - 1, this.y) ? 1 : 0, // Gem left?
-                    maze.isGem(this.x + 1, this.y) ? 1 : 0, // Gem right?
+                    // 7-10: Local GOOD gems (green/gold) - SEEK these!
+                    maze.isGem(this.x, this.y - 1) ? 1 : 0, // Good gem up?
+                    maze.isGem(this.x, this.y + 1) ? 1 : 0, // Good gem down?
+                    maze.isGem(this.x - 1, this.y) ? 1 : 0, // Good gem left?
+                    maze.isGem(this.x + 1, this.y) ? 1 : 0, // Good gem right?
 
-                    // Gem collection progress
+                    // 11-14: Local BAD gems (red) - AVOID these! 🔴
+                    maze.isRedGem(this.x, this.y - 1) ? 1 : 0, // Bad gem up?
+                    maze.isRedGem(this.x, this.y + 1) ? 1 : 0, // Bad gem down?
+                    maze.isRedGem(this.x - 1, this.y) ? 1 : 0, // Bad gem left?
+                    maze.isRedGem(this.x + 1, this.y) ? 1 : 0, // Bad gem right?
+
+                    // 15: Gem collection progress
                     Math.min(Math.floor(this.score / 10), 9)  // Gems collected (capped at 9)
                 ];
                 return state;
