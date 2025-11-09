@@ -1903,6 +1903,13 @@
                         this.aiEpisodeVisitedCells.clear();
                         this.aiEpisodeVisitedCells.set(`${this.ai.x},${this.ai.y}`, 1); // Mark starting pos (1,2)
                         this.aiStepCount = 0; // Reset step counter for new episode
+                    } else {
+                        // 🐛 BUG FIX: If player finished and AI timed out, mark AI as done to end game
+                        // Otherwise timeout triggers every step (300, 301, 302...) creating infinite episodes!
+                        if (episodeTimedOut) {
+                            this.ai.reachedGoal = true; // Force game end
+                            console.log('⏱️ AI timed out while waiting for game end. Marking as complete.');
+                        }
                     }
 
                     // 🔥 DYNAMIC COMPLEXITY: Update complexity every 10 episodes
