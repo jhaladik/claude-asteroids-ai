@@ -1509,6 +1509,10 @@
                 this.playerStepCount = 0;
                 this.aiStepCount = 0;
 
+                // 🗺️ MEMORY MAP: Track visited cells per episode to penalize loops
+                this.aiEpisodeVisitedCells = new Map();
+                this.aiEpisodeVisitedCells.set(`${this.ai.x},${this.ai.y}`, 1); // Starting position
+
                 // Calculate environment complexity
                 this.complexity = this.maze.calculateComplexity();
                 console.log('Environment complexity:', this.complexity);
@@ -1717,7 +1721,23 @@
                 // Explorer: Navigation-focused with gem awareness in complex mazes
                 // Collector: Gem-focused with navigation awareness in simple mazes
                 const complexityScore = this.coordinator.complexity.score;
-                const reward = this.ai.move(dx, dy, this.maze, activeAgent.agentType, complexityScore, this.aiStepCount);
+                let reward = this.ai.move(dx, dy, this.maze, activeAgent.agentType, complexityScore, this.aiStepCount);
+
+                // 🗺️ MEMORY MAP: Penalize revisiting cells (like human memory)
+                // This encourages systematic exploration instead of random loops
+                const cellKey = `${this.ai.x},${this.ai.y}`;
+                const visitCount = this.aiEpisodeVisitedCells.get(cellKey) || 0;
+                this.aiEpisodeVisitedCells.set(cellKey, visitCount + 1);
+
+                // Progressive penalty: -3 for 2nd visit, -6 for 3rd, -9 for 4th, etc.
+                if (visitCount > 0) {
+                    const loopPenalty = -3 * visitCount;
+                    reward += loopPenalty;
+                    // Optional: Log when AI gets stuck in loops (for debugging)
+                    if (visitCount >= 3) {
+                        console.log(`⚠️ AI looping! Cell ${cellKey} visited ${visitCount + 1} times (penalty: ${loopPenalty})`);
+                    }
+                }
 
                 // Get next state (same representation for both agents)
                 const nextState = this.ai.getState(this.maze);
@@ -1742,6 +1762,11 @@
                     this.coordinator.recordSuccess();
                     this.aiSuccesses++;
                     this.aiAttempts++;
+
+                    // 🗺️ MEMORY MAP: Clear episode memory (new episode = fresh start)
+                    this.aiEpisodeVisitedCells.clear();
+                    this.aiEpisodeVisitedCells.set(`${this.ai.x},${this.ai.y}`, 1); // Mark starting pos
+                    this.aiStepCount = 0; // Reset step counter for new episode
 
                     // 🔥 DYNAMIC COMPLEXITY: Update complexity every 10 episodes
                     this.complexityUpdateCounter++;
