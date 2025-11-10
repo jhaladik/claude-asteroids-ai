@@ -367,13 +367,36 @@
                     </div>
                 </div>
 
+                <!-- 🎓 AGENTS SCHOOL - Save/Load Named Agents -->
+                <div style="margin-top: 15px; padding: 10px; background: rgba(0,255,255,0.05); border: 1px solid rgba(0,255,255,0.2); border-radius: 4px;">
+                    <div style="font-size: 12px; color: #0ff; margin-bottom: 8px; font-weight: bold;">
+                        🎓 AGENTS SCHOOL
+                    </div>
+                    <div style="font-size: 10px; margin-bottom: 10px;">
+                        <input type="text" id="agentName" placeholder="Agent name (e.g., simple_runner)"
+                               style="width: 100%; padding: 5px; background: #0f0f1e; border: 1px solid #0ff; color: #fff; font-family: 'Courier New'; font-size: 11px; border-radius: 3px;">
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="game.saveAgent()" style="flex: 1; background: #0a0; color: #fff; border: none; padding: 6px; border-radius: 3px; font-size: 10px; cursor: pointer; font-family: 'Courier New';">
+                            💾 Save Agent
+                        </button>
+                        <button onclick="document.getElementById('agentFileInput').click()" style="flex: 1; background: #0a0; color: #fff; border: none; padding: 6px; border-radius: 3px; font-size: 10px; cursor: pointer; font-family: 'Courier New';">
+                            📂 Load Agent
+                        </button>
+                    </div>
+                    <input type="file" id="agentFileInput" accept=".json" style="display: none;" onchange="game.loadAgent(event)">
+                    <div style="font-size: 9px; color: #888; margin-top: 5px;">
+                        Train agents on different mazes, save & load for specific challenges
+                    </div>
+                </div>
+
                 <!-- Version Information -->
                 <div class="version-info">
-                    <div><span class="version-number">v2.0-complexity</span> | <span id="buildDate">2025-01-09</span></div>
+                    <div><span class="version-number">v2.0-school</span> | <span id="buildDate">2025-01-10</span></div>
                     <div style="margin-top: 4px;">
+                        <span class="feature-tag">AGENTS-SCHOOL</span>
                         <span class="feature-tag">ADAPTIVE-HP</span>
-                        <span class="feature-tag">DYNAMIC-COMPLEXITY</span>
-                        <span class="feature-tag">MULTI-OBJECTIVE</span>
+                        <span class="feature-tag">MULTI-AGENT</span>
                     </div>
                 </div>
             </div>
@@ -2363,6 +2386,127 @@
                       `- Collector: ${stats.collectorEpisodes} episodes, ${stats.collectorQTable} states\n` +
                       `- Complexity: ${this.complexity.score}/100\n\n` +
                       `💡 Split mode ${stats.splitMode ? 'ACTIVE' : 'inactive'} (threshold: 40)`);
+            }
+
+            // 🎓 AGENTS SCHOOL: Save named agent
+            saveAgent() {
+                const agentName = document.getElementById('agentName').value.trim();
+
+                if (!agentName) {
+                    alert('⚠️ Please enter an agent name first!');
+                    return;
+                }
+
+                const stats = this.coordinator.getCombinedStats();
+                const activeAgent = this.coordinator.getActiveAgent();
+
+                const agentData = {
+                    metadata: {
+                        name: agentName,
+                        savedDate: new Date().toISOString(),
+                        version: 'v2.0-school',
+                        mazeSize: this.maze.size,
+                        complexity: this.complexity.score,
+                        activeAgent: stats.activeAgent
+                    },
+                    // Save both agents so we can load into multi-agent system
+                    explorer: {
+                        qTable: this.coordinator.explorer.qTable,
+                        epsilon: this.coordinator.explorer.epsilon,
+                        episodes: this.coordinator.explorer.episodes,
+                        demonstrations: this.coordinator.explorer.demonstrations,
+                        imitationWeight: this.coordinator.explorer.imitationWeight,
+                        successes: this.coordinator.explorerSuccesses
+                    },
+                    collector: {
+                        qTable: this.coordinator.collector.qTable,
+                        epsilon: this.coordinator.collector.epsilon,
+                        episodes: this.coordinator.collector.episodes,
+                        demonstrations: this.coordinator.collector.demonstrations,
+                        imitationWeight: this.coordinator.collector.imitationWeight,
+                        successes: this.coordinator.collectorSuccesses
+                    },
+                    stats: {
+                        totalEpisodes: stats.totalEpisodes,
+                        totalSuccesses: stats.totalSuccesses,
+                        splitMode: stats.splitMode
+                    }
+                };
+
+                // Download as JSON file
+                const dataStr = JSON.stringify(agentData, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${agentName}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                console.log(`🎓 Agent "${agentName}" saved:`, agentData);
+                alert(`✅ Agent "${agentName}" saved!\n\n` +
+                      `Episodes: ${stats.totalEpisodes}\n` +
+                      `Successes: ${stats.totalSuccesses}\n` +
+                      `Randomness: ${Math.round(activeAgent.epsilon * 100)}%\n` +
+                      `Q-Table: ${stats.totalQTable} states`);
+            }
+
+            // 🎓 AGENTS SCHOOL: Load named agent
+            loadAgent(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const agentData = JSON.parse(e.target.result);
+
+                        // Validate agent data
+                        if (!agentData.metadata || !agentData.explorer || !agentData.collector) {
+                            throw new Error('Invalid agent file format');
+                        }
+
+                        // Load Explorer agent
+                        this.coordinator.explorer.qTable = agentData.explorer.qTable;
+                        this.coordinator.explorer.epsilon = agentData.explorer.epsilon;
+                        this.coordinator.explorer.episodes = agentData.explorer.episodes;
+                        this.coordinator.explorer.demonstrations = agentData.explorer.demonstrations || [];
+                        this.coordinator.explorer.imitationWeight = agentData.explorer.imitationWeight || 1.0;
+                        this.coordinator.explorerSuccesses = agentData.explorer.successes || 0;
+
+                        // Load Collector agent
+                        this.coordinator.collector.qTable = agentData.collector.qTable;
+                        this.coordinator.collector.epsilon = agentData.collector.epsilon;
+                        this.coordinator.collector.episodes = agentData.collector.episodes;
+                        this.coordinator.collector.demonstrations = agentData.collector.demonstrations || [];
+                        this.coordinator.collector.imitationWeight = agentData.collector.imitationWeight || 1.0;
+                        this.coordinator.collectorSuccesses = agentData.collector.successes || 0;
+
+                        // Update display
+                        this.updateAIDisplay();
+                        document.getElementById('agentName').value = agentData.metadata.name;
+
+                        console.log(`🎓 Agent "${agentData.metadata.name}" loaded:`, agentData);
+                        alert(`✅ Agent "${agentData.metadata.name}" loaded!\n\n` +
+                              `Saved: ${new Date(agentData.metadata.savedDate).toLocaleDateString()}\n` +
+                              `Episodes: ${agentData.stats.totalEpisodes}\n` +
+                              `Successes: ${agentData.stats.totalSuccesses}\n` +
+                              `Complexity: ${agentData.metadata.complexity}/100\n\n` +
+                              `🧠 Ready to continue training or compete!`);
+
+                    } catch (error) {
+                        console.error('Error loading agent:', error);
+                        alert(`❌ Error loading agent: ${error.message}\n\n` +
+                              `Make sure the file is a valid agent JSON file.`);
+                    }
+                };
+                reader.readAsText(file);
+
+                // Reset file input so same file can be loaded again
+                event.target.value = '';
             }
         }
 
