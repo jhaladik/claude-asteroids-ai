@@ -372,21 +372,39 @@
                     <div style="font-size: 12px; color: #0ff; margin-bottom: 8px; font-weight: bold;">
                         🎓 AGENTS SCHOOL
                     </div>
-                    <div style="font-size: 10px; margin-bottom: 10px;">
+
+                    <!-- Agent Name & Notes -->
+                    <div style="font-size: 10px; margin-bottom: 5px;">
                         <input type="text" id="agentName" placeholder="Agent name (e.g., simple_runner)"
-                               style="width: 100%; padding: 5px; background: #0f0f1e; border: 1px solid #0ff; color: #fff; font-family: 'Courier New'; font-size: 11px; border-radius: 3px;">
+                               style="width: 100%; padding: 5px; background: #0f0f1e; border: 1px solid #0ff; color: #fff; font-family: 'Courier New'; font-size: 11px; border-radius: 3px; margin-bottom: 5px;">
+                        <input type="text" id="agentNotes" placeholder="Notes (e.g., good for 15x15 mazes)"
+                               style="width: 100%; padding: 5px; background: #0f0f1e; border: 1px solid #666; color: #aaa; font-family: 'Courier New'; font-size: 10px; border-radius: 3px;">
                     </div>
-                    <div style="display: flex; gap: 5px;">
-                        <button onclick="game.saveAgent()" style="flex: 1; background: #0a0; color: #fff; border: none; padding: 6px; border-radius: 3px; font-size: 10px; cursor: pointer; font-family: 'Courier New';">
-                            💾 Save Agent
+
+                    <!-- Save/Load/Compare Buttons -->
+                    <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                        <button onclick="game.saveAgentToLibrary()" style="flex: 1; background: #0a0; color: #fff; border: none; padding: 6px; border-radius: 3px; font-size: 10px; cursor: pointer; font-family: 'Courier New';">
+                            💾 Save
                         </button>
-                        <button onclick="document.getElementById('agentFileInput').click()" style="flex: 1; background: #0a0; color: #fff; border: none; padding: 6px; border-radius: 3px; font-size: 10px; cursor: pointer; font-family: 'Courier New';">
-                            📂 Load Agent
+                        <button onclick="document.getElementById('agentFileInput').click()" style="flex: 1; background: #05a; color: #fff; border: none; padding: 6px; border-radius: 3px; font-size: 10px; cursor: pointer; font-family: 'Courier New';">
+                            📂 Import
+                        </button>
+                        <button onclick="game.showComparison()" style="flex: 1; background: #a50; color: #fff; border: none; padding: 6px; border-radius: 3px; font-size: 10px; cursor: pointer; font-family: 'Courier New';">
+                            ⚖️ Compare
                         </button>
                     </div>
                     <input type="file" id="agentFileInput" accept=".json" style="display: none;" onchange="game.loadAgent(event)">
+
+                    <!-- Saved Agents Library -->
+                    <div style="margin-top: 8px; max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 3px; padding: 5px;">
+                        <div style="font-size: 9px; color: #888; margin-bottom: 5px;">📚 Agent Library (browser storage)</div>
+                        <div id="agentLibrary" style="font-size: 10px;">
+                            <!-- Agent list populated by JavaScript -->
+                        </div>
+                    </div>
+
                     <div style="font-size: 9px; color: #888; margin-top: 5px;">
-                        Train agents on different mazes, save & load for specific challenges
+                        Quick-load agents, compare performance, add training notes
                     </div>
                 </div>
 
@@ -2508,10 +2526,383 @@
                 // Reset file input so same file can be loaded again
                 event.target.value = '';
             }
+
+            // 🎓 AGENTS SCHOOL: Save agent to browser localStorage
+            saveAgentToLibrary() {
+                const agentName = document.getElementById('agentName').value.trim();
+                const agentNotes = document.getElementById('agentNotes').value.trim();
+
+                if (!agentName) {
+                    alert('⚠️ Please enter an agent name first!');
+                    return;
+                }
+
+                const stats = this.coordinator.getCombinedStats();
+                const activeAgent = this.coordinator.getActiveAgent();
+
+                const agentData = {
+                    metadata: {
+                        name: agentName,
+                        notes: agentNotes,
+                        savedDate: new Date().toISOString(),
+                        version: 'v2.0-school',
+                        mazeSize: this.maze.size,
+                        complexity: this.complexity.score,
+                        activeAgent: stats.activeAgent
+                    },
+                    explorer: {
+                        qTable: this.coordinator.explorer.qTable,
+                        epsilon: this.coordinator.explorer.epsilon,
+                        episodes: this.coordinator.explorer.episodes,
+                        demonstrations: this.coordinator.explorer.demonstrations,
+                        imitationWeight: this.coordinator.explorer.imitationWeight,
+                        successes: this.coordinator.explorerSuccesses
+                    },
+                    collector: {
+                        qTable: this.coordinator.collector.qTable,
+                        epsilon: this.coordinator.collector.epsilon,
+                        episodes: this.coordinator.collector.episodes,
+                        demonstrations: this.coordinator.collector.demonstrations,
+                        imitationWeight: this.coordinator.collector.imitationWeight,
+                        successes: this.coordinator.collectorSuccesses
+                    },
+                    stats: {
+                        totalEpisodes: stats.totalEpisodes,
+                        totalSuccesses: stats.totalSuccesses,
+                        splitMode: stats.splitMode
+                    }
+                };
+
+                // Save to localStorage
+                try {
+                    const libraryKey = 'agents_school_v2';
+                    const library = JSON.parse(localStorage.getItem(libraryKey) || '{}');
+                    library[agentName] = agentData;
+                    localStorage.setItem(libraryKey, JSON.stringify(library));
+
+                    console.log(`🎓 Agent "${agentName}" saved to library:`, agentData);
+                    alert(`✅ Agent "${agentName}" saved to browser library!\n\n` +
+                          `Episodes: ${stats.totalEpisodes}\n` +
+                          `Successes: ${stats.totalSuccesses}\n` +
+                          `Randomness: ${Math.round(activeAgent.epsilon * 100)}%\n` +
+                          `Q-Table: ${stats.totalQTable} states\n\n` +
+                          `Notes: ${agentNotes || '(none)'}`);
+
+                    this.refreshAgentLibrary();
+                } catch (error) {
+                    console.error('Error saving to localStorage:', error);
+                    alert(`❌ Error saving agent: ${error.message}\n\nBrowser storage may be full.`);
+                }
+            }
+
+            // 🎓 AGENTS SCHOOL: Refresh agent library display
+            refreshAgentLibrary() {
+                const libraryDiv = document.getElementById('agentLibrary');
+                const libraryKey = 'agents_school_v2';
+
+                try {
+                    const library = JSON.parse(localStorage.getItem(libraryKey) || '{}');
+                    const agentNames = Object.keys(library);
+
+                    if (agentNames.length === 0) {
+                        libraryDiv.innerHTML = '<div style="color: #666; font-size: 9px; padding: 5px;">No agents saved yet. Train an agent and save it!</div>';
+                        return;
+                    }
+
+                    // Sort by date (newest first)
+                    agentNames.sort((a, b) => {
+                        const dateA = new Date(library[a].metadata.savedDate);
+                        const dateB = new Date(library[b].metadata.savedDate);
+                        return dateB - dateA;
+                    });
+
+                    let html = '';
+                    for (const name of agentNames) {
+                        const agent = library[name];
+                        const date = new Date(agent.metadata.savedDate).toLocaleDateString();
+                        const successRate = agent.stats.totalEpisodes > 0
+                            ? Math.round((agent.stats.totalSuccesses / agent.stats.totalEpisodes) * 100)
+                            : 0;
+
+                        html += `
+                            <div style="background: rgba(0,255,255,0.05); border: 1px solid rgba(0,255,255,0.2); border-radius: 3px; padding: 5px; margin-bottom: 4px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="flex: 1;">
+                                        <div style="color: #0ff; font-weight: bold; margin-bottom: 2px;">${name}</div>
+                                        <div style="font-size: 8px; color: #888;">
+                                            ${date} | ${agent.stats.totalEpisodes} eps | ${successRate}% success | C:${agent.metadata.complexity}
+                                        </div>
+                                        ${agent.metadata.notes ? `<div style="font-size: 8px; color: #aaa; margin-top: 2px; font-style: italic;">${agent.metadata.notes}</div>` : ''}
+                                    </div>
+                                    <div style="display: flex; gap: 3px;">
+                                        <button onclick="game.quickLoadAgent('${name}')" style="background: #050; color: #0f0; border: 1px solid #0f0; padding: 3px 6px; border-radius: 2px; font-size: 8px; cursor: pointer;">LOAD</button>
+                                        <button onclick="game.exportAgent('${name}')" style="background: #005; color: #5af; border: 1px solid #5af; padding: 3px 6px; border-radius: 2px; font-size: 8px; cursor: pointer;">↓</button>
+                                        <button onclick="game.deleteAgentFromLibrary('${name}')" style="background: #500; color: #f55; border: 1px solid #f55; padding: 3px 6px; border-radius: 2px; font-size: 8px; cursor: pointer;">×</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    libraryDiv.innerHTML = html;
+                } catch (error) {
+                    console.error('Error loading library:', error);
+                    libraryDiv.innerHTML = '<div style="color: #f55; font-size: 9px; padding: 5px;">Error loading library</div>';
+                }
+            }
+
+            // 🎓 AGENTS SCHOOL: Quick load agent from library
+            quickLoadAgent(name) {
+                const libraryKey = 'agents_school_v2';
+
+                try {
+                    const library = JSON.parse(localStorage.getItem(libraryKey) || '{}');
+                    const agentData = library[name];
+
+                    if (!agentData) {
+                        alert(`❌ Agent "${name}" not found in library!`);
+                        return;
+                    }
+
+                    // Load Explorer agent
+                    this.coordinator.explorer.qTable = agentData.explorer.qTable;
+                    this.coordinator.explorer.epsilon = agentData.explorer.epsilon;
+                    this.coordinator.explorer.episodes = agentData.explorer.episodes;
+                    this.coordinator.explorer.demonstrations = agentData.explorer.demonstrations || [];
+                    this.coordinator.explorer.imitationWeight = agentData.explorer.imitationWeight || 1.0;
+                    this.coordinator.explorerSuccesses = agentData.explorer.successes || 0;
+
+                    // Load Collector agent
+                    this.coordinator.collector.qTable = agentData.collector.qTable;
+                    this.coordinator.collector.epsilon = agentData.collector.epsilon;
+                    this.coordinator.collector.episodes = agentData.collector.episodes;
+                    this.coordinator.collector.demonstrations = agentData.collector.demonstrations || [];
+                    this.coordinator.collector.imitationWeight = agentData.collector.imitationWeight || 1.0;
+                    this.coordinator.collectorSuccesses = agentData.collector.successes || 0;
+
+                    // Update display
+                    this.updateAIDisplay();
+                    document.getElementById('agentName').value = agentData.metadata.name;
+                    document.getElementById('agentNotes').value = agentData.metadata.notes || '';
+
+                    console.log(`🎓 Agent "${name}" loaded from library:`, agentData);
+                    alert(`✅ Agent "${name}" loaded!\n\n` +
+                          `Episodes: ${agentData.stats.totalEpisodes}\n` +
+                          `Successes: ${agentData.stats.totalSuccesses}\n` +
+                          `Notes: ${agentData.metadata.notes || '(none)'}\n\n` +
+                          `🧠 Ready to continue training!`);
+
+                } catch (error) {
+                    console.error('Error loading agent:', error);
+                    alert(`❌ Error loading agent: ${error.message}`);
+                }
+            }
+
+            // 🎓 AGENTS SCHOOL: Delete agent from library
+            deleteAgentFromLibrary(name) {
+                if (!confirm(`🗑️ Delete agent "${name}"?\n\nThis cannot be undone.`)) {
+                    return;
+                }
+
+                const libraryKey = 'agents_school_v2';
+
+                try {
+                    const library = JSON.parse(localStorage.getItem(libraryKey) || '{}');
+                    delete library[name];
+                    localStorage.setItem(libraryKey, JSON.stringify(library));
+
+                    console.log(`🗑️ Agent "${name}" deleted from library`);
+                    this.refreshAgentLibrary();
+                } catch (error) {
+                    console.error('Error deleting agent:', error);
+                    alert(`❌ Error deleting agent: ${error.message}`);
+                }
+            }
+
+            // 🎓 AGENTS SCHOOL: Export agent as JSON file
+            exportAgent(name) {
+                const libraryKey = 'agents_school_v2';
+
+                try {
+                    const library = JSON.parse(localStorage.getItem(libraryKey) || '{}');
+                    const agentData = library[name];
+
+                    if (!agentData) {
+                        alert(`❌ Agent "${name}" not found!`);
+                        return;
+                    }
+
+                    // Download as JSON file
+                    const dataStr = JSON.stringify(agentData, null, 2);
+                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(dataBlob);
+
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `${name}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+
+                    console.log(`📥 Agent "${name}" exported`);
+                } catch (error) {
+                    console.error('Error exporting agent:', error);
+                    alert(`❌ Error exporting agent: ${error.message}`);
+                }
+            }
+
+            // 🎓 AGENTS SCHOOL: Show agent comparison view
+            showComparison() {
+                const libraryKey = 'agents_school_v2';
+
+                try {
+                    const library = JSON.parse(localStorage.getItem(libraryKey) || '{}');
+                    const agentNames = Object.keys(library);
+
+                    if (agentNames.length < 2) {
+                        alert('⚠️ Need at least 2 agents in library to compare!\n\nSave more agents first.');
+                        return;
+                    }
+
+                    // Create comparison modal
+                    const modal = document.createElement('div');
+                    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center; font-family: "Courier New"; color: #fff;';
+
+                    let html = `
+                        <div style="background: #0f0f1e; border: 2px solid #0ff; border-radius: 8px; padding: 20px; max-width: 800px; max-height: 90%; overflow-y: auto;">
+                            <h2 style="color: #0ff; margin-top: 0;">⚖️ Agent Comparison</h2>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="font-size: 12px; color: #888;">Select Agent 1:</label>
+                                <select id="compareAgent1" style="width: 100%; padding: 8px; background: #0f0f1e; border: 1px solid #0ff; color: #fff; margin-top: 5px; border-radius: 3px;">
+                                    ${agentNames.map(name => `<option value="${name}">${name}</option>`).join('')}
+                                </select>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="font-size: 12px; color: #888;">Select Agent 2:</label>
+                                <select id="compareAgent2" style="width: 100%; padding: 8px; background: #0f0f1e; border: 1px solid #0ff; color: #fff; margin-top: 5px; border-radius: 3px;">
+                                    ${agentNames.map((name, i) => `<option value="${name}" ${i === 1 ? 'selected' : ''}>${name}</option>`).join('')}
+                                </select>
+                            </div>
+
+                            <button id="compareBtn" style="width: 100%; padding: 10px; background: #0a0; color: #fff; border: none; border-radius: 3px; cursor: pointer; margin-bottom: 15px;">Compare</button>
+
+                            <div id="comparisonResults" style="margin-top: 15px;"></div>
+
+                            <button onclick="this.parentElement.parentElement.remove()" style="width: 100%; padding: 10px; background: #500; color: #fff; border: none; border-radius: 3px; cursor: pointer; margin-top: 15px;">Close</button>
+                        </div>
+                    `;
+
+                    modal.innerHTML = html;
+                    document.body.appendChild(modal);
+
+                    // Add compare functionality
+                    document.getElementById('compareBtn').onclick = () => {
+                        const name1 = document.getElementById('compareAgent1').value;
+                        const name2 = document.getElementById('compareAgent2').value;
+
+                        if (name1 === name2) {
+                            alert('⚠️ Please select two different agents!');
+                            return;
+                        }
+
+                        const agent1 = library[name1];
+                        const agent2 = library[name2];
+
+                        const rate1 = agent1.stats.totalEpisodes > 0
+                            ? Math.round((agent1.stats.totalSuccesses / agent1.stats.totalEpisodes) * 100)
+                            : 0;
+                        const rate2 = agent2.stats.totalEpisodes > 0
+                            ? Math.round((agent2.stats.totalSuccesses / agent2.stats.totalEpisodes) * 100)
+                            : 0;
+
+                        const explorerStates1 = Object.keys(agent1.explorer.qTable).length;
+                        const collectorStates1 = Object.keys(agent1.collector.qTable).length;
+                        const explorerStates2 = Object.keys(agent2.explorer.qTable).length;
+                        const collectorStates2 = Object.keys(agent2.collector.qTable).length;
+
+                        document.getElementById('comparisonResults').innerHTML = `
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                                <tr style="background: rgba(0,255,255,0.1); border-bottom: 2px solid #0ff;">
+                                    <th style="padding: 8px; text-align: left; color: #0ff;">Metric</th>
+                                    <th style="padding: 8px; text-align: center; color: #0ff;">${name1}</th>
+                                    <th style="padding: 8px; text-align: center; color: #0ff;">${name2}</th>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Episodes</td>
+                                    <td style="padding: 8px; text-align: center;">${agent1.stats.totalEpisodes}</td>
+                                    <td style="padding: 8px; text-align: center;">${agent2.stats.totalEpisodes}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Successes</td>
+                                    <td style="padding: 8px; text-align: center;">${agent1.stats.totalSuccesses}</td>
+                                    <td style="padding: 8px; text-align: center;">${agent2.stats.totalSuccesses}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Success Rate</td>
+                                    <td style="padding: 8px; text-align: center; color: ${rate1 > rate2 ? '#0f0' : '#fff'}">${rate1}%</td>
+                                    <td style="padding: 8px; text-align: center; color: ${rate2 > rate1 ? '#0f0' : '#fff'}">${rate2}%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Complexity</td>
+                                    <td style="padding: 8px; text-align: center;">${agent1.metadata.complexity}/100</td>
+                                    <td style="padding: 8px; text-align: center;">${agent2.metadata.complexity}/100</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Explorer Q-States</td>
+                                    <td style="padding: 8px; text-align: center;">${explorerStates1}</td>
+                                    <td style="padding: 8px; text-align: center;">${explorerStates2}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Collector Q-States</td>
+                                    <td style="padding: 8px; text-align: center;">${collectorStates1}</td>
+                                    <td style="padding: 8px; text-align: center;">${collectorStates2}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Explorer Randomness</td>
+                                    <td style="padding: 8px; text-align: center;">${Math.round(agent1.explorer.epsilon * 100)}%</td>
+                                    <td style="padding: 8px; text-align: center;">${Math.round(agent2.explorer.epsilon * 100)}%</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Collector Randomness</td>
+                                    <td style="padding: 8px; text-align: center;">${Math.round(agent1.collector.epsilon * 100)}%</td>
+                                    <td style="padding: 8px; text-align: center;">${Math.round(agent2.collector.epsilon * 100)}%</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; color: #888;">Saved Date</td>
+                                    <td style="padding: 8px; text-align: center; font-size: 9px;">${new Date(agent1.metadata.savedDate).toLocaleString()}</td>
+                                    <td style="padding: 8px; text-align: center; font-size: 9px;">${new Date(agent2.metadata.savedDate).toLocaleString()}</td>
+                                </tr>
+                                ${agent1.metadata.notes || agent2.metadata.notes ? `
+                                <tr style="border-top: 2px solid #333;">
+                                    <td style="padding: 8px; color: #888;">Notes</td>
+                                    <td style="padding: 8px; text-align: center; font-size: 9px; font-style: italic; color: #aaa;">${agent1.metadata.notes || '-'}</td>
+                                    <td style="padding: 8px; text-align: center; font-size: 9px; font-style: italic; color: #aaa;">${agent2.metadata.notes || '-'}</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        `;
+                    };
+
+                } catch (error) {
+                    console.error('Error showing comparison:', error);
+                    alert(`❌ Error showing comparison: ${error.message}`);
+                }
+            }
+
+            // Initialize library on page load
+            initAgentLibrary() {
+                this.refreshAgentLibrary();
+            }
         }
 
         // Start game
         const game = new Game();
+
+        // Initialize Agents School library
+        game.initAgentLibrary();
     </script>
 </body>
 </html>
